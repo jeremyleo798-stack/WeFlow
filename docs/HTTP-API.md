@@ -793,9 +793,309 @@ members = requests.get(
 ).json()
 ```
 
+### Node.js
+
+```javascript
+const axios = require('axios');
+
+const BASE_URL = 'http://127.0.0.1:5031';
+const headers = {
+  'Authorization': 'Bearer YOUR_TOKEN',
+  'Content-Type': 'application/json'
+};
+
+// 获取消息
+async function getMessages() {
+  const response = await axios.post(`${BASE_URL}/api/v1/messages`, {
+    talker: 'xxx@chatroom',
+    limit: 50,
+    media: true,
+    image: true
+  }, { headers });
+  return response.data;
+}
+
+// 获取会话列表
+async function getSessions() {
+  const response = await axios.get(`${BASE_URL}/api/v1/sessions`, {
+    params: { limit: 100 },
+    headers
+  });
+  return response.data;
+}
+
+// 获取群成员
+async function getGroupMembers(chatroomId) {
+  const response = await axios.get(`${BASE_URL}/api/v1/group-members`, {
+    params: {
+      chatroomId,
+      includeMessageCounts: 1,
+      forceRefresh: 0
+    },
+    headers
+  });
+  return response.data;
+}
+```
+
+### SSE 消息推送订阅
+
+```python
+import requests
+import json
+
+BASE_URL = "http://127.0.0.1:5031"
+TOKEN = "YOUR_TOKEN"
+
+# 订阅消息推送（SSE）
+def subscribe_message_push():
+    url = f"{BASE_URL}/api/v1/push/messages?access_token={TOKEN}"
+    
+    with requests.get(url, stream=True) as response:
+        response.raise_for_status()
+        
+        for line in response.iter_lines():
+            if not line:
+                continue
+            
+            line_str = line.decode('utf-8')
+            
+            # 解析 SSE 事件
+            if line_str.startswith('event:'):
+                event_type = line_str[6:].strip()
+            elif line_str.startswith('data:'):
+                data = json.loads(line_str[5:].strip())
+                print(f"[{event_type}] {data}")
+                
+                # 处理新消息
+                if event_type == 'message.new':
+                    print(f"新消息: {data.get('content')}")
+                elif event_type == 'message.revoke':
+                    print(f"撤回消息: {data.get('rawid')}")
+```
+
+```javascript
+// Node.js SSE 订阅
+const EventSource = require('eventsource');
+
+const BASE_URL = 'http://127.0.0.1:5031';
+const TOKEN = 'YOUR_TOKEN';
+
+const es = new EventSource(`${BASE_URL}/api/v1/push/messages?access_token=${TOKEN}`);
+
+es.addEventListener('message.new', (event) => {
+  const data = JSON.parse(event.data);
+  console.log('新消息:', data.content);
+});
+
+es.addEventListener('message.revoke', (event) => {
+  const data = JSON.parse(event.data);
+  console.log('撤回消息:', data.rawid);
+});
+
+es.onerror = (error) => {
+  console.error('SSE 连接错误:', error);
+};
+```
+
+### 朋友圈接口示例
+
+```python
+import requests
+
+BASE_URL = "http://127.0.0.1:5031"
+headers = {"Authorization": "Bearer YOUR_TOKEN"}
+
+# 获取朋友圈时间线
+timeline = requests.get(
+    f"{BASE_URL}/api/v1/sns/timeline",
+    params={
+        "limit": 20,
+        "offset": 0,
+        "media": 1,
+        "replace": 1
+    },
+    headers=headers
+).json()
+
+# 导出朋友圈
+export_result = requests.post(
+    f"{BASE_URL}/api/v1/sns/export",
+    json={
+        "outputDir": "C:\\Users\\Alice\\Desktop\\sns-export",
+        "format": "html",
+        "exportMedia": True,
+        "exportImages": True,
+        "exportLivePhotos": True,
+        "start": "20250101",
+        "end": "20251231"
+    },
+    headers=headers
+).json()
+
+# 获取朋友圈发布者
+usernames = requests.get(
+    f"{BASE_URL}/api/v1/sns/usernames",
+    headers=headers
+).json()
+```
+
+### ChatLab Pull 协议对接
+
+```python
+import requests
+
+BASE_URL = "http://127.0.0.1:5031"
+headers = {"Authorization": "Bearer YOUR_TOKEN"}
+
+# 获取会话列表（ChatLab 格式）
+sessions = requests.get(
+    f"{BASE_URL}/api/v1/sessions",
+    params={"format": "chatlab"},
+    headers=headers
+).json()
+
+# 增量拉取会话消息
+def pull_messages(session_id, since=None, limit=5000):
+    params = {"limit": limit}
+    if since:
+        params["since"] = since
+    
+    response = requests.get(
+        f"{BASE_URL}/api/v1/sessions/{session_id}/messages",
+        params=params,
+        headers=headers
+    ).json()
+    
+    messages = response.get("messages", [])
+    sync = response.get("sync", {})
+    
+    # 处理消息
+    for msg in messages:
+        print(f"[{msg['accountName']}] {msg['content']}")
+    
+    # 如果有更多数据，继续拉取
+    if sync.get("hasMore"):
+        return pull_messages(
+            session_id,
+            since=sync.get("nextSince"),
+            limit=limit
+        )
+    
+    return messages
+
+# 拉取某个会话的所有消息
+all_messages = pull_messages("xxx@chatroom")
+```
+
 ---
 
-## 10. 注意事项
+## 10. 错误处理
+
+### 错误响应格式
+
+所有错误响应都遵循统一的 JSON 格式：
+
+```json
+{
+  "error": "错误描述信息"
+}
+```
+
+### 常见错误码
+
+| HTTP 状态码 | 说明 | 可能原因 |
+|------------|------|---------|
+| `400` | Bad Request | 参数缺失或格式错误 |
+| `401` | Unauthorized | Token 无效或缺失 |
+| `404` | Not Found | 资源不存在（如会话 ID 错误） |
+| `405` | Method Not Allowed | 请求方法不支持（如应该用 GET 却用了 POST） |
+| `500` | Internal Server Error | 服务器内部错误（如数据库未连接） |
+
+### 错误处理示例
+
+```python
+import requests
+
+def safe_api_call(url, params=None, json_data=None, method='GET'):
+    headers = {"Authorization": "Bearer YOUR_TOKEN"}
+    
+    try:
+        if method == 'GET':
+            response = requests.get(url, params=params, headers=headers)
+        else:
+            response = requests.post(url, json=json_data, headers=headers)
+        
+        # 检查 HTTP 错误
+        response.raise_for_status()
+        
+        # 解析 JSON
+        data = response.json()
+        
+        # 检查业务错误
+        if not data.get('success', True):
+            print(f"业务错误: {data.get('error')}")
+            return None
+        
+        return data
+    
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 401:
+            print("认证失败：请检查 Token")
+        elif e.response.status_code == 404:
+            print("资源不存在：请检查参数")
+        else:
+            print(f"HTTP 错误: {e}")
+    
+    except requests.exceptions.ConnectionError:
+        print("连接失败：请确保 WeFlow 正在运行且 API 服务已启动")
+    
+    except Exception as e:
+        print(f"未知错误: {e}")
+    
+    return None
+```
+
+---
+
+## 11. 常见问题（FAQ）
+
+### Q1: 为什么返回 401 Unauthorized？
+
+**A:** 可能的原因：
+1. Token 未配置：在 WeFlow 设置页 → API 服务 → 生成 Token
+2. Token 传递方式错误：确保使用 `Authorization: Bearer <token>` 或 `?access_token=<token>`
+3. Token 已过期或被重置：重新生成 Token
+
+### Q2: 为什么消息接口返回空数组？
+
+**A:** 可能的原因：
+1. 数据库未连接：先在 WeFlow 中完成数据库连接
+2. 会话 ID 错误：检查 `talker` 参数是否正确（私聊是 wxid，群聊是 xxx@chatroom）
+3. 时间范围错误：检查 `start` 和 `end` 参数格式
+
+### Q3: 媒体文件无法访问？
+
+**A:** 必须先在消息接口中启用 `media=1`，系统会导出媒体文件到本地缓存目录，然后才能通过 `/api/v1/media/*` 访问。
+
+### Q4: 如何获取实时消息推送？
+
+**A:** 
+1. 在 WeFlow 设置页启用"API 服务"和"主动推送"
+2. 使用 SSE 客户端订阅 `GET /api/v1/push/messages?access_token=YOUR_TOKEN`
+3. 监听 `message.new` 和 `message.revoke` 事件
+
+### Q5: ChatLab 格式与标准格式有什么区别？
+
+**A:** 
+- **标准格式**：WeFlow 原生格式，字段名如 `localId`、`serverId`、`localType`
+- **ChatLab 格式**：ChatLab 协议标准格式，字段名如 `platformMessageId`、`sender`、`timestamp`，可直接作为 ChatLab 远程数据源
+
+使用 `chatlab=1` 或 `format=chatlab` 参数切换格式。
+
+---
+
+## 12. 注意事项
 
 1. API 仅监听本机 `127.0.0.1`，不对外网开放。
 2. 使用前需要先在 WeFlow 中完成数据库连接。

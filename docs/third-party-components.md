@@ -158,6 +158,44 @@ JSON 载荷/出参的字段命名可参照 `electron/services/wcdbCore.ts` 里
   `sessionIds`、输出目录、媒体类型等）序列化为 JSON，写入子进程 stdin 后关闭。
 - 响应：子进程通过 stdout 按行输出 `WeliveExportEvent` 的 NDJSON（`ready`/`progress`/
   `created_file`/`created_dir`/`session_error`/`result` 等类型），最终以一条 `result` 事件
-  （含 `success`/`success_count`/`fail_count`/`session_output_paths`/`raw_export_manifests`
-  等字段）结束。进程以退出码 `0` 且最后一条事件为 `result` 且 `success !== false` 视为成功。
+  （含 `success`/`success_count`/`fail_count`/`session_output_paths`/`raw_export_manifests`/
+  `raw_session_output_paths`/`failed_sessions` 等字段）结束。进程以退出码 `0` 且最后一条事件为 `result` 且 `success !== false` 视为成功。
+
+**`result` 事件字段说明：**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `success` | boolean | 整体是否成功 |
+| `success_count` | number | 成功导出的会话数 |
+| `fail_count` | number | 失败的会话数 |
+| `session_output_paths` | Record<string, string> | 会话 ID → 导出目录路径映射 |
+| `raw_session_output_paths` | Record<string, string> | 会话 ID → 原始文件输出路径映射（可选） |
+| `raw_export_manifests` | Record<string, object> | 会话 ID → 导出清单元数据（可选） |
+| `failed_sessions` | Array<{session_id?: string, error?: string}> | 失败会话详情列表（可选） |
 - 支持通过关闭 stdin/发送信号来响应取消（`AbortSignal`），进程应能在收到终止信号后尽快退出。
+
+## 4. 本仓库自带的原生实现（`native/`）
+
+仓库内提供上述第 1、2 类组件的完整可编译实现，不依赖任何外部授权或在线校验：
+
+- `native/wcdb-native`：Rust `cdylib`，导出全部 WCDB ABI（含 5 个必需符号 + 读写/统计/媒体/朋友圈接口），
+  使用 `rusqlite` 的 `bundled-sqlcipher-vendored-openssl` 打开本机数据库，静态链接，产物仅依赖 Windows 系统 DLL。
+- `native/media-decrypt`：Rust `napi` 插件，实现 `decryptDatNative`（XOR + AES + WXGF 解包）与
+  `encryptDatNative`。
+
+构建（Windows，需 Rust GNU 工具链与 MinGW-w64）：
+
+```bash
+cd native/wcdb-native && cargo build --release
+cd native/media-decrypt && cargo build --release
+# 将 target/release/wcdb_api.dll 与 weflow-image-native-win32-x64.node 放到任意稳定目录，
+# 然后在设置页分别填入 wcdbLibPath / imageNativeAddonPath。
+```
+
+已知边界：
+
+- 消息游标、会话/消息/联系人/群成员/朋友圈/统计/媒体查询均为只读实现；
+  发消息、删除/改写消息、会话重排、防删触发器、朋友圈删除等写操作会返回明确的失败信息。
+- `wcdb_start_monitor_pipe` 返回 `-1`（监听管道未实现），应用会跳过实时推送；
+  `VerifyUser` 返回 `{"success":false,...}`；`wcdb_cloud_*` 为空操作。
+- `InitProtection` 不是本实现的导出，应用侧会在符号缺失时跳过该握手。

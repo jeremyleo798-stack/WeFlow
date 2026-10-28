@@ -1,0 +1,18 @@
+[package]
+name = "weflow-image-native"
+version = "5.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+aes = "0.8"
+cipher = "0.4"
+napi = { version = "3", features = ["napi8", "dyn-symbols"] }
+napi-derive = "3"
+
+[profile.release]
+opt-level = 2
+lto = true

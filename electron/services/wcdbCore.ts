@@ -1,4 +1,4 @@
-import { join, dirname, basename } from 'path'
+import { join, dirname, basename, delimiter } from 'path'
 import { existsSync, mkdirSync, readdirSync, statSync, readFileSync } from 'fs'
 import { appendFile } from 'fs/promises'
 import { tmpdir } from 'os'
@@ -70,12 +70,14 @@ export class WcdbCore {
 
   // 函数引用
   private wcdbInit: any = null
+  private wcdbInitProtection: any = null
   private wcdbShutdown: any = null
   private wcdbPurgeMemory: any = null
   private purgeTimer: ReturnType<typeof setInterval> | null = null
   private wcdbOpenAccount: any = null
   private wcdbCloseAccount: any = null
   private wcdbSetMyAccountId: any = null
+  private wcdbSetMyWxid: any = null
   private wcdbFreeString: any = null
   private wcdbUpdateMessage: any = null
   private wcdbInsertTextMessage: any = null
@@ -810,6 +812,34 @@ export class WcdbCore {
     }
   }
 
+  private getInitProtectionCandidates(dllPath: string): string[] {
+    const dllDir = dirname(dllPath)
+    const candidates = String(process.env.WCDB_PROTECTION_PATH || '')
+      .split(delimiter)
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+    candidates.push(
+      dllPath,
+      dllDir,
+      dirname(dllDir),
+      process.resourcesPath || '',
+      process.resourcesPath ? join(process.resourcesPath, 'resources') : '',
+      this.resourcesPath || '',
+      this.resourcesPath ? join(this.resourcesPath, 'resources') : '',
+      join(process.cwd(), 'resources')
+    )
+    const seen = new Set<string>()
+    const result: string[] = []
+    for (const candidate of candidates) {
+      if (!candidate) continue
+      const key = candidate.toLowerCase()
+      if (seen.has(key)) continue
+      seen.add(key)
+      result.push(candidate)
+    }
+    return result
+  }
+
   /**
    * 初始化 WCDB
    */
@@ -873,6 +903,39 @@ export class WcdbCore {
       this.lib = this.koffi.load(dllPath)
       this.writeLog('[bootstrap] koffi.load ok', true)
 
+      // 部分第三方实现（如 v4.5.1 配套组件）要求初始化前先完成 InitProtection 握手；
+      // 不存在该导出时保持原有行为。
+      this.wcdbInitProtection = this.bindOptionalExport('int32 InitProtection(const char* resourcePath)')
+      if (this.wcdbInitProtection) {
+        const severity = (code: number): number => {
+          if (code >= -2212 && code <= -2201) return 0
+          if (code === -102 || code === -101 || code === -1006) return 1
+          return 2
+        }
+        let bestCode: number | null = null
+        let protectionOk = false
+        for (const candidate of this.getInitProtectionCandidates(dllPath)) {
+          const startedAt = Date.now()
+          try {
+            const rc = Number(this.wcdbInitProtection(candidate))
+            this.writeLog(`[bootstrap] InitProtection path=${candidate} rc=${rc} elapsed=${Date.now() - startedAt}ms`, true)
+            if (rc === 0) {
+              protectionOk = true
+              break
+            }
+            if (bestCode === null || severity(rc) < severity(bestCode)) bestCode = rc
+          } catch (e) {
+            this.writeLog(`[bootstrap] InitProtection path=${candidate} exception=${String(e)} elapsed=${Date.now() - startedAt}ms`, true)
+          }
+        }
+        if (!protectionOk) {
+          const finalCode = bestCode ?? -1000
+          lastDllInitError = this.formatInitProtectionError(finalCode)
+          this.writeLog(`[bootstrap] InitProtection failed finalCode=${finalCode}`, true)
+          return false
+        }
+      }
+
       // 定义类型
       // wcdb_status wcdb_init()
       this.wcdbInit = this.lib.func('int32 wcdb_init()')
@@ -901,6 +964,9 @@ export class WcdbCore {
       } catch {
         this.wcdbSetMyAccountId = null
       }
+
+      // 旧版实现的等价接口
+      this.wcdbSetMyWxid = this.bindOptionalExport('int32 wcdb_set_my_wxid(int64 handle, const char* wxid)')
 
       // wcdb_status wcdb_update_message(wcdb_handle handle, const char* session_id, int64_t local_id, int32_t create_time, const char* new_content, char** out_error)
       try {
@@ -1378,6 +1444,7 @@ export class WcdbCore {
 
       // 初始化
       const initResult = this.wcdbInit()
+      this.writeLog(`[bootstrap] wcdb_init rc=${initResult}`, true)
       if (initResult !== 0) {
         console.error('WCDB 初始化失败:', initResult)
         lastDllInitError = this.formatInitProtectionError(initResult)
@@ -1913,9 +1980,11 @@ export class WcdbCore {
       this.clearDisplayNameCache()
       this.clearMediaStreamPageCache()
       lastDllInitError = null
-      if (this.wcdbSetMyAccountId && accountId) {
+      const setAccountId = this.wcdbSetMyAccountId || this.wcdbSetMyWxid
+      if (setAccountId && accountId) {
         try {
-          this.wcdbSetMyAccountId(this.handle, accountId)
+          const setResult = Number(setAccountId(this.handle, accountId))
+          if (setResult !== 0) this.writeLog(`setMyAccountId code=${setResult}`)
         } catch (e) {
           // 静默失败
         }

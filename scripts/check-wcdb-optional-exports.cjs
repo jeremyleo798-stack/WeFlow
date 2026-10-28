@@ -88,7 +88,7 @@ function makeCore(options = {}) {
       assert.ok(Object.hasOwn(mocks, name), `Unexpected module: ${name}`)
       return mocks[name]
     },
-    process: { platform: options.platform || 'win32', env: {}, pid: process.pid },
+    process: { platform: options.platform || 'win32', env: options.env || {}, pid: process.pid, cwd: () => fixtureRoot },
     console: { error() {}, warn() {}, log() {} },
     Buffer, setImmediate, setInterval, clearInterval, setTimeout, clearTimeout
   })
@@ -140,6 +140,43 @@ test('native load errors and nonzero initialization status still fail', async ()
     assert.ok(core.getLastInitError())
     if (options.native) assert.equal(state.calls.get('wcdb_init').length, 1)
   }
+})
+
+test('a provider without InitProtection keeps the existing initialization flow', async () => {
+  const fixture = makeCore()
+  assert.equal(await fixture.core.initialize(), true)
+  assert.equal(fixture.state.bindings.filter(({ name }) => name === 'InitProtection').length, 1)
+  assert.equal(fixture.state.calls.has('InitProtection'), false)
+  assert.equal(fixture.state.calls.get('wcdb_init').length, 1)
+})
+
+test('rejected InitProtection stops initialization before wcdb_init', async () => {
+  const fixture = makeCore({ native: { InitProtection: () => -103 } })
+  assert.equal(await fixture.core.initialize(), false)
+  assert.equal(fixture.core.initialized, false)
+  assert.equal(fixture.state.calls.has('wcdb_init'), false)
+  assert.ok(fixture.state.calls.get('InitProtection').length >= 1)
+  assert.match(fixture.core.getLastInitError(), /-103/)
+})
+
+test('InitProtection succeeds from WCDB_PROTECTION_PATH and initialization continues', async () => {
+  const expected = path.join(fixtureRoot, 'protection')
+  const fixture = makeCore({
+    env: { WCDB_PROTECTION_PATH: expected },
+    native: { InitProtection: (resourcePath) => (resourcePath === expected ? 0 : -1000) }
+  })
+  assert.equal(await fixture.core.initialize(), true)
+  assert.equal(fixture.state.calls.get('InitProtection')[0][0], expected)
+  assert.equal(fixture.state.calls.get('wcdb_init').length, 1)
+})
+
+test('legacy wcdb_set_my_wxid is used when wcdb_set_my_account_id is absent', async () => {
+  const fixture = makeCore({ native: { wcdb_set_my_wxid: () => 0 } })
+  assert.equal(await fixture.core.open(accountPath, 'synthetic-key'), true)
+  const calls = fixture.state.calls.get('wcdb_set_my_wxid')
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0][0], 7)
+  assert.equal(calls[0][1], 'synthetic-account')
 })
 
 const unavailableCalls = [

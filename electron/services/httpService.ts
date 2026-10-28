@@ -1327,7 +1327,7 @@ class HttpService {
         fromCache: result.fromCache,
         updatedAt: result.updatedAt,
         members: result.data.map((member) => ({
-          accountId: member.username,
+          wxid: member.username,
           displayName: member.displayName,
           nickname: member.nickname || '',
           remark: member.remark || '',
