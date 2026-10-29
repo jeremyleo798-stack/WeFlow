@@ -188,9 +188,10 @@ export function createIncrementalAnimatePlugin(
       previousContentLength = length;
     },
     getLastRenderCharCount() {
-      const count = lastRenderCharCount;
-      lastRenderCharCount = 0;
-      return count;
+      return lastRenderCharCount;
+    },
+    commit() {
+      previousContentLength = lastRenderCharCount;
     },
   };
 }

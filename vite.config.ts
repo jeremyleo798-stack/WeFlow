@@ -155,6 +155,9 @@ export default defineConfig({
   },
   build: {
     chunkSizeWarningLimit: 900,
+    // 发布包不拷源码、不带 sourcemap
+    sourcemap: false,
+    minify: 'esbuild',
     commonjsOptions: {
       ignoreDynamicRequires: true
     }

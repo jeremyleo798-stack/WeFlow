@@ -21,6 +21,7 @@
     "typecheck:electron": "tsc --noEmit -p tsconfig.node.json",
     "typecheck": "npm run typecheck:renderer && npm run typecheck:electron",
     "build": "npm run typecheck && node scripts/clean-dist-electron.cjs && vite build && electron-builder",
+    "build:portable": "npm run typecheck:renderer && node scripts/clean-dist-electron.cjs && vite build && electron-builder --win portable --x64 --config.electronDist=node_modules/electron/dist",
     "preview": "vite preview",
     "electron:dev": "node scripts/prepare-electron-runtime.cjs && vite --mode electron",
     "electron:build": "npm run build"
@@ -107,6 +108,14 @@
   },
   "build": {
     "appId": "com.WeFlow.app",
+    "asar": true,
+    "afterPack": "scripts/after-pack-koffi.cjs",
+    "electronFuses": {
+      "enableNodeCliInspectArguments": false,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true
+    },
     "publish": {
       "provider": "github",
       "owner": "hicccc77",
@@ -191,6 +200,9 @@
       "installerSidebar": null,
       "uninstallerSidebar": null
     },
+    "portable": {
+      "artifactName": "WeFlow.exe"
+    },
     "extraResources": [
       {
         "from": "resources/",
@@ -214,7 +226,8 @@
     ],
     "files": [
       "dist/**/*",
-      "dist-electron/**/*"
+      "dist-electron/**/*",
+      "!**/*.map"
     ],
     "asarUnpack": [
       "node_modules/silk-wasm/**/*",
