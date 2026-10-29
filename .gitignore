@@ -30,6 +30,7 @@ test/
 out
 release
 release-build
+release-out
 tmp/
 
 /packages/electron-liquid-glass/
