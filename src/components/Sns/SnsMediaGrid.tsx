@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react'
 import { Play, Lock, Download, ImageOff } from 'lucide-react'
 import { LivePhotoIcon } from '../../components/LivePhotoIcon'
 import { RefreshCw } from 'lucide-react'
+import { toMediaUrl } from '../../utils/mediaUrl'
 
 interface SnsMedia {
     url: string
@@ -36,10 +37,11 @@ const extractVideoFrame = async (videoPath: string): Promise<string> => {
     return new Promise((resolve, reject) => {
         const video = document.createElement('video')
         video.preload = 'auto'
+        // weflow-media 是跨源协议，抽帧写 canvas 需要 CORS 模式（协议端返回 ACAO）
+        video.crossOrigin = 'anonymous'
         video.src = videoPath
         video.muted = true
         video.currentTime = 0 // Initial reset
-        // video.crossOrigin = 'anonymous' // Not needed for file:// usually
 
         const onSeeked = () => {
             try {
@@ -148,7 +150,7 @@ const MediaItem = ({ media, postType, onPreview, onMediaDeleted }: { media: SnsM
 
                     if (result.success) {
                         if (result.dataUrl) setThumbSrc(result.dataUrl)
-                        else if (result.videoPath) setThumbSrc(`file://${result.videoPath.replace(/\\/g, '/')}`)
+                        else if (result.videoPath) setThumbSrc(toMediaUrl(result.videoPath))
                     } else {
                         imageRetryOrFail(result.status)
                     }
@@ -160,7 +162,7 @@ const MediaItem = ({ media, postType, onPreview, onMediaDeleted }: { media: SnsM
                             key: skipDecrypt ? undefined : (media.livePhoto.key || media.key)
                         }).then((res: any) => {
                             if (!cancelled && res.success && res.videoPath) {
-                                setLiveVideoPath(`file://${res.videoPath.replace(/\\/g, '/')}`)
+                                setLiveVideoPath(toMediaUrl(res.videoPath))
                             }
                         }).catch(() => { })
                     }
@@ -179,7 +181,7 @@ const MediaItem = ({ media, postType, onPreview, onMediaDeleted }: { media: SnsM
                     if (cancelled) return
 
                     if (result.success && result.videoPath) {
-                        const localPath = `file://${result.videoPath.replace(/\\/g, '/')}`
+                        const localPath = toMediaUrl(result.videoPath)
                         setVideoPath(localPath)
 
                         try {
@@ -227,7 +229,7 @@ const MediaItem = ({ media, postType, onPreview, onMediaDeleted }: { media: SnsM
                         key: skipDecrypt ? undefined : media.key
                     })
                     if (res.success && res.videoPath) {
-                        const local = `file://${res.videoPath.replace(/\\/g, '/')}`
+                        const local = toMediaUrl(res.videoPath)
                         setVideoPath(local)
                         onPreview(local, true, undefined)
                     } else {
@@ -262,17 +264,17 @@ const MediaItem = ({ media, postType, onPreview, onMediaDeleted }: { media: SnsM
                 if (result.dataUrl) {
                     link.href = result.dataUrl
                 } else if (result.videoPath) {
-                    // For local video files, we need to fetch as blob to force download behavior
-                    // or just use the file protocol url if the browser supports it
+                    // 视频缓存文件通过 weflow-media:// 读取，fetch 成 blob 后再触发下载
+                    const mediaUrl = toMediaUrl(result.videoPath)
                     try {
-                        const response = await fetch(`file://${result.videoPath}`)
+                        const response = await fetch(mediaUrl)
                         const blob = await response.blob()
                         const url = URL.createObjectURL(blob)
                         link.href = url
                         setTimeout(() => URL.revokeObjectURL(url), 60000)
                     } catch (err) {
                         console.error('Video fetch failed, falling back to direct link', err)
-                        link.href = `file://${result.videoPath}`
+                        link.href = mediaUrl
                     }
                 }
 

@@ -7,6 +7,8 @@ import './UpdateDialog.scss'
 interface UpdateInfo {
     version?: string
     releaseNotes?: string
+    sha512?: string
+    downloadUrl?: string
 }
 
 interface UpdateDialogProps {
@@ -106,6 +108,24 @@ const UpdateDialog: React.FC<UpdateDialogProps> = ({
                             )}
                         </div>
                     </div>
+
+                    {(updateInfo.sha512 || updateInfo.downloadUrl) && (
+                        <div className="verify-box">
+                            <p className="verify-title">此更新包未做代码签名，请核对下载来源与 SHA-512</p>
+                            {updateInfo.downloadUrl && (
+                                <p className="verify-line">
+                                    <span>下载地址</span>
+                                    <code>{updateInfo.downloadUrl}</code>
+                                </p>
+                            )}
+                            {updateInfo.sha512 && (
+                                <p className="verify-line">
+                                    <span>SHA-512</span>
+                                    <code>{updateInfo.sha512}</code>
+                                </p>
+                            )}
+                        </div>
+                    )}
 
                     {isDownloading ? (
                         <div className="progress-section">

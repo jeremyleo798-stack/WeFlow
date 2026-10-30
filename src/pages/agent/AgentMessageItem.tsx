@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import type { ChatStatus, UIMessage } from 'ai'
 import type { IconComponent } from '@/types/icon'
+import { toMediaUrl } from '@/utils/mediaUrl'
 import {
   ChainOfThoughtSearchResult,
   ChainOfThoughtSearchResults,
@@ -386,8 +387,7 @@ function AgentMessageItemImpl({
     if (isPresentedMedia && output?.success !== true) return null
     const filePath = String(output?.filePath || '')
     if (!filePath) return null
-    const normalizedPath = filePath.replace(/\\/g, '/')
-    const imageSrc = encodeURI(`file://${normalizedPath.startsWith('/') ? '' : '/'}${normalizedPath}`).replace(/#/g, '%23')
+    const imageSrc = toMediaUrl(filePath)
     const caption = isRandomImage || isHistoryMedia || isPresentedMedia
       ? [output?.sender, output?.from, output?.time].map((v) => String(v || '')).filter(Boolean).join(' · ')
       : ''

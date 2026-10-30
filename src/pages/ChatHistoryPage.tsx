@@ -4,6 +4,7 @@ import { ChatRecordItem } from '../types/models'
 import TitleBar from '../components/TitleBar'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { Avatar } from '../components/Avatar'
+import { toMediaUrl } from '../utils/mediaUrl'
 import './ChatHistoryPage.scss'
 
 const forwardedImageCache = new Map<string, string>()
@@ -494,7 +495,7 @@ function ForwardedImage({ item, sessionId }: { item: ChatRecordItem; sessionId: 
   if (localPath) {
     return (
       <div className="media-content">
-        <img src={localPath} alt="图片" referrerPolicy="no-referrer" />
+        <img src={toMediaUrl(localPath)} alt="图片" referrerPolicy="no-referrer" />
       </div>
     )
   }

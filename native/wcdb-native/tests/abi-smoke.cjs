@@ -13,7 +13,7 @@ if (!sessionDb || !keyHex || !accountId) {
   console.error('Usage: node native/wcdb-native/tests/abi-smoke.cjs <session.db> <keyHex> <accountId> [dll]')
   process.exit(2)
 }
-const dllPath = process.argv[5] || path.join(__dirname, '..', 'dist', 'wcdb_api.dll')
+const dllPath = process.argv[5] || path.join(__dirname, '..', 'prebuilt', 'wcdb_api.dll')
 const accountDir = path.resolve(path.dirname(sessionDb), '..', '..')
 
 const lib = koffi.load(dllPath)

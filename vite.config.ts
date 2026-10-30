@@ -139,6 +139,39 @@ const copyJiebaNodeWasmPlugin = () => ({
   },
 })
 
+// 生产构建注入 CSP。dev 环境的 Vite HMR 需要内联脚本与 ws 连接，无法套用同一策略。
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https: http: file: weflow-media:",
+  "media-src 'self' data: blob: https: http: file: weflow-media:",
+  "font-src 'self' data: file:",
+  // 故意不含 'self'/'file:'：渲染进程不能 fetch 本地文件，本地媒体统一走 weflow-media://
+  "connect-src https: http: blob: data: weflow-media:",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "frame-src 'self' https: http:",
+  "form-action 'none'",
+].join('; ')
+
+const contentSecurityPolicyPlugin = () => ({
+  name: 'weflow-csp',
+  apply: 'build' as const,
+  transformIndexHtml(html: string) {
+    return {
+      html,
+      tags: [
+        {
+          tag: 'meta',
+          attrs: { 'http-equiv': 'Content-Security-Policy', content: CONTENT_SECURITY_POLICY },
+          injectTo: 'head-prepend' as const,
+        },
+      ],
+    }
+  },
+})
+
 export default defineConfig({
   base: './',
   server: {
@@ -168,6 +201,7 @@ export default defineConfig({
   plugins: [
     tailwindcss(),
     react(),
+    contentSecurityPolicyPlugin(),
     electron([
       {
         entry: 'electron/main.ts',

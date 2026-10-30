@@ -1,6 +1,5 @@
 ﻿import { app, BrowserWindow } from 'electron'
 import { basename, dirname, extname, join, resolve as resolvePath } from 'path'
-import { fileURLToPath, pathToFileURL } from 'url'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'fs'
 import { writeFile, rename, rm, readdir, appendFile, readFile } from 'fs/promises'
 import { homedir, tmpdir } from 'os'
@@ -8,6 +7,7 @@ import crypto from 'crypto'
 import { ConfigService } from './config'
 import { wcdbService } from './wcdbService'
 import { decryptDatViaNativeAsync, nativeAddonLocation } from './nativeImageDecrypt'
+import { mediaUrlToPath, toMediaUrl } from '../mediaUrl'
 
 // 获取 ffmpeg-static 的路径
 function getStaticFfmpegPath(): string | null {
@@ -538,11 +538,11 @@ export class ImageDecryptService {
     const normalizedCacheKey = String(cacheKey || '').trim()
     const resolvedPath = String(localPath || '').trim()
     if (!normalizedCacheKey || !resolvedPath) return
-    if (/^(data:image\/|blob:|https?:\/\/)/i.test(resolvedPath)) {
+    if (/^(data:image\/|blob:|https?:\/\/|weflow-media:)/i.test(resolvedPath)) {
       this.emitCacheResolved(payload, normalizedCacheKey, resolvedPath)
       return
     }
-    const filePath = /^file:\/\//i.test(resolvedPath)
+    const filePath = /^(file|weflow-media):/i.test(resolvedPath)
       ? (this.fileUrlToPathSafely(resolvedPath) || resolvedPath)
       : resolvedPath
     this.emitCacheResolved(payload, normalizedCacheKey, this.resolveEmitPath(filePath, true))
@@ -1978,11 +1978,11 @@ export class ImageDecryptService {
 
     let formattedPath = localPath
     if (payload.preferFilePath === true) {
-      if (/^file:\/\//i.test(localPath)) {
+      if (/^(file|weflow-media):/i.test(localPath)) {
         formattedPath = this.fileUrlToPathSafely(localPath) || localPath
       }
-    } else if (!/^(data:image\/|blob:|https?:\/\/)/i.test(localPath)) {
-      const filePath = /^file:\/\//i.test(localPath)
+    } else if (!/^(data:image\/|blob:|https?:\/\/|weflow-media:)/i.test(localPath)) {
+      const filePath = /^(file|weflow-media):/i.test(localPath)
         ? (this.fileUrlToPathSafely(localPath) || localPath)
         : localPath
       formattedPath = this.resolveLocalPathForPayload(filePath, false)
@@ -1993,21 +1993,14 @@ export class ImageDecryptService {
   }
 
   private fileUrlToPathSafely(value: string): string | null {
-    try {
-      const url = new URL(value)
-      url.search = ''
-      url.hash = ''
-      return fileURLToPath(url)
-    } catch {
-      return null
-    }
+    return mediaUrlToPath(value)
   }
 
   private emitCacheResolvedFromResult(payload: CachedImagePayload, cacheKey: string, result: DecryptResult): void {
     if (!result.success || !result.localPath) return
     const localPath = String(result.localPath || '').trim()
     if (!localPath) return
-    const emitPath = payload.preferFilePath === true && !/^(data:image\/|blob:|https?:\/\/|file:\/\/)/i.test(localPath)
+    const emitPath = payload.preferFilePath === true && !/^(data:image\/|blob:|https?:\/\/|file:\/\/|weflow-media:)/i.test(localPath)
       ? this.filePathToUrl(localPath)
       : localPath
     this.emitCacheResolved(payload, cacheKey, emitPath)
@@ -2363,13 +2356,13 @@ export class ImageDecryptService {
   }
 
   private filePathToUrl(filePath: string): string {
-    const url = pathToFileURL(filePath).toString()
+    let version: number | undefined
     try {
-      const mtime = statSync(filePath).mtimeMs
-      return `${url}?v=${Math.floor(mtime)}`
+      version = Math.floor(statSync(filePath).mtimeMs)
     } catch {
-      return url
+      version = undefined
     }
+    return toMediaUrl(filePath, version)
   }
 
   private isImageFile(filePath: string): boolean {

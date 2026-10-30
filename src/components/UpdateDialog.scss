@@ -148,6 +148,41 @@
                 }
             }
 
+            .verify-box {
+                margin: -12px 0 24px;
+                padding: 12px 16px;
+                border-radius: 14px;
+                background: color-mix(in srgb, var(--bg-primary, #fbfbfb) 80%, transparent);
+                border: 1px solid var(--border-color, #e2ddd7);
+
+                .verify-title {
+                    margin: 0 0 8px;
+                    font-size: 12px;
+                    font-weight: 600;
+                    color: var(--text-tertiary, #8c7b6e);
+                }
+
+                .verify-line {
+                    display: flex;
+                    gap: 10px;
+                    margin: 4px 0 0;
+                    font-size: 11px;
+                    line-height: 1.5;
+                    color: var(--text-secondary, #666666);
+
+                    span {
+                        flex-shrink: 0;
+                        color: var(--text-tertiary, #8c7b6e);
+                    }
+
+                    code {
+                        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                        word-break: break-all;
+                        user-select: text;
+                    }
+                }
+            }
+
             .progress-section {
                 margin-bottom: 30px;
 

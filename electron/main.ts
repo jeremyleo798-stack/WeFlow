@@ -1,11 +1,12 @@
 import './preload-env'
-import { app, BrowserWindow, ipcMain, nativeTheme, Tray, Menu, nativeImage, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, nativeTheme, session, Tray, Menu, nativeImage, shell } from 'electron'
 import { Worker } from 'worker_threads'
 import { fork, type ChildProcess, type ForkOptions } from 'child_process'
 import { createHash, randomUUID } from 'crypto'
 import { join, dirname, resolve, relative, isAbsolute } from 'path'
-import { pathToFileURL } from 'url'
 import { autoUpdater } from 'electron-updater'
+import { registerMediaProtocol, registerMediaScheme } from './mediaProtocol'
+import { toMediaUrl } from './mediaUrl'
 import { readFile, writeFile, mkdir, rm, readdir, copyFile } from 'fs/promises'
 import { appendFileSync, existsSync, mkdirSync, realpathSync } from 'fs'
 import { ConfigService } from './services/config'
@@ -528,6 +529,17 @@ const getUpdaterFeedUrlByTrack = (track: 'stable' | 'preview' | 'dev'): string =
   if (track === 'stable') return `${repoBase}/latest/download`
   if (track === 'preview') return `${repoBase}/download/nightly-preview`
   return `${repoBase}/download/nightly-dev`
+}
+
+const getUpdateVerification = (files: Array<{ url?: string; sha512?: string }> | undefined) => {
+  const primary = (files || []).find((file) => typeof file?.sha512 === 'string' && file.sha512.length > 0)
+  if (!primary) return {}
+  const rawUrl = typeof primary.url === 'string' ? primary.url.trim() : ''
+  const fileName = rawUrl ? rawUrl.split('/').filter(Boolean).pop() : undefined
+  const downloadUrl = rawUrl
+    ? (/^https?:\/\//i.test(rawUrl) ? rawUrl : `${getUpdaterFeedUrlByTrack(getEffectiveUpdateTrack())}/${fileName}`)
+    : undefined
+  return { sha512: primary.sha512, downloadUrl }
 }
 
 const applyAutoUpdateChannel = (reason: 'startup' | 'settings' = 'startup') => {
@@ -1160,7 +1172,7 @@ function createWindow(options: { autoShow?: boolean } = {}) {
       preload: join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      webSecurity: false // Allow loading local files (video playback)
+      webSecurity: true
     },
     frame: false,
     show: false
@@ -1586,7 +1598,7 @@ function createVideoPlayerWindow(videoPath: string, videoWidth?: number, videoHe
       preload: join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      webSecurity: false
+      webSecurity: true
     },
     titleBarStyle: 'hidden',
     titleBarOverlay: {
@@ -1645,7 +1657,7 @@ function createImageViewerWindow(imagePath: string, liveVideoPath?: string) {
       preload: join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      webSecurity: false // 允许加载本地文件
+      webSecurity: true
     },
     frame: false,
     show: false,
@@ -2784,7 +2796,7 @@ function registerIpcHandlers() {
       return {
         success: true,
         filePath,
-        url: pathToFileURL(filePath).toString(),
+        url: toMediaUrl(filePath),
         mediaType: detected.mediaType,
         filename: String(payload?.filename || '').slice(0, 180) || `图片.${detected.ext}`,
         sizeBytes: data.length,
@@ -3240,7 +3252,8 @@ function registerIpcHandlers() {
             hasUpdate: true,
             version: latestVersion,
             releaseNotes: getDialogReleaseNotes(result.updateInfo.releaseNotes),
-            minimumVersion: (result.updateInfo as any).minimumVersion
+            minimumVersion: (result.updateInfo as any).minimumVersion,
+            ...getUpdateVerification(result.updateInfo.files)
           }
         }
       }
@@ -5012,7 +5025,7 @@ function registerIpcHandlers() {
       const ext = meta.split('/')[1]?.split(';')[0] || 'jpg'
       const tmpPath = join(app.getPath('temp'), `weflow_preview_${Date.now()}.${ext}`)
       await writeFile(tmpPath, Buffer.from(imagePath.slice(commaIdx + 1), 'base64'))
-      createImageViewerWindow(`file://${tmpPath.replace(/\\/g, '/')}`, liveVideoPath)
+      createImageViewerWindow(toMediaUrl(tmpPath), liveVideoPath)
     } else {
       createImageViewerWindow(imagePath, liveVideoPath)
     }
@@ -5511,6 +5524,8 @@ function registerIpcHandlers() {
 
 // 主窗口引用
 let mainWindow: BrowserWindow | null = null
+// 必须在 app ready 之前注册协议；实际处理在 ready 后挂载
+registerMediaScheme()
 const hasSingleInstanceLock = app.requestSingleInstanceLock()
 if (!hasSingleInstanceLock) app.quit()
 app.on('second-instance', () => {
@@ -5547,7 +5562,8 @@ function checkForUpdatesOnStartup() {
           mainWindow.webContents.send('app:updateAvailable', {
             version: latestVersion,
             releaseNotes: getDialogReleaseNotes(result.updateInfo.releaseNotes),
-            minimumVersion: (result.updateInfo as any).minimumVersion
+            minimumVersion: (result.updateInfo as any).minimumVersion,
+            ...getUpdateVerification(result.updateInfo.files)
           })
         }
       }
@@ -5557,10 +5573,32 @@ function checkForUpdatesOnStartup() {
   }, 3000)
 }
 
+// weflow-media 允许读取的本地目录：缓存、临时文件与微信数据目录。
+// 渲染进程只能请求这些根目录内的文件，配置变化后下一次请求即生效。
+const getMediaRoots = (): string[] => {
+  const roots = [app.getPath('userData'), app.getPath('temp'), join(app.getPath('documents'), 'WeFlow')]
+  try {
+    const cachePath = String(configService?.get('cachePath') || '').trim()
+    if (cachePath) roots.push(cachePath)
+    const dbPath = String(configService?.get('dbPath') || '').trim()
+    if (dbPath) roots.push(dbPath)
+  } catch {
+    // 配置尚未初始化时只用默认根目录
+  }
+  return roots
+}
+
+const allowedPermissions = new Set(['clipboard-sanitized-write'])
+
 app.whenReady().then(async () => {
   if (!hasSingleInstanceLock) return
   // 先初始化配置，以便在启动早期判定是否需要静默启动
   configService = new ConfigService()
+  registerMediaProtocol(getMediaRoots)
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    callback(allowedPermissions.has(permission))
+  })
+  session.defaultSession.setPermissionCheckHandler((_webContents, permission) => allowedPermissions.has(permission))
   applyAutoUpdateChannel('startup')
   syncLaunchAtStartupPreference()
   const onboardingDone = configService.get('onboardingDone') === true

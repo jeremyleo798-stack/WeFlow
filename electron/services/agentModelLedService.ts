@@ -2,7 +2,6 @@ import { app } from 'electron'
 import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'fs'
 import { readFile } from 'fs/promises'
 import { dirname, join } from 'path'
-import { fileURLToPath } from 'url'
 import { createHash, randomUUID } from 'crypto'
 import { AsyncLocalStorage } from 'async_hooks'
 import type { ProviderOptions, SystemModelMessage } from '@ai-sdk/provider-utils'
@@ -23,6 +22,7 @@ import {
 } from 'ai'
 import { z } from 'zod'
 import { chatService, type ConversationAnalysisScanMessage, type Message } from './chatService'
+import { mediaUrlToPath } from '../mediaUrl'
 import { voiceTranscribeService } from './voiceTranscribeService'
 import { snsService } from './snsService'
 import { normalizeWebSearchQuerySignature, searchWeb } from './webSearchService'
@@ -7098,7 +7098,8 @@ export class AgentService {
         parts: message.parts.map((part, index) => {
           if (part.type !== 'file' || !text(part.mediaType).startsWith('image/')) return part
           try {
-            const filePath = fileURLToPath(text(part.url))
+            const filePath = mediaUrlToPath(text(part.url))
+            if (!filePath) throw new Error('无法解析本地图片路径')
             const size = existsSync(filePath) ? statSync(filePath).size : 0
             if (pathInsideAgentImages(filePath) && size > 0 && size <= 20 * 1024 * 1024) {
               const data = readFileSync(filePath)

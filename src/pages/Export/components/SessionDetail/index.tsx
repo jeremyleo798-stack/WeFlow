@@ -5,6 +5,9 @@ import { formatAbsoluteDate } from '../../utils/format'
 import { MessageSquare, Image, Mic, Video, FileText, Smile } from 'lucide-react'
 import './SessionDetail.scss'
 
+const DEFAULT_AVATAR =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23d8d8d8'/%3E%3Ccircle cx='32' cy='24' r='11' fill='%23f4f4f4'/%3E%3Cpath d='M12 60c2-13 10-20 20-20s18 7 20 20z' fill='%23f4f4f4'/%3E%3C/svg%3E"
+
 interface SessionDetailProps {
   session: SessionRow
   onExportContent: (contentType: 'text' | 'image' | 'voice' | 'video' | 'file' | 'emoji') => void
@@ -23,7 +26,7 @@ const SessionDetail: React.FC<SessionDetailProps> = ({ session, onExportContent 
     <div className="session-detail">
       <div className="sd-header">
         <div className="sd-avatar">
-          <img src={session.avatarUrl || 'file://./assets/default_avatar.png'} alt="avatar" />
+          <img src={session.avatarUrl || DEFAULT_AVATAR} alt="avatar" />
         </div>
         <div className="sd-info">
           <h2 className="sd-name">{session.displayName}</h2>

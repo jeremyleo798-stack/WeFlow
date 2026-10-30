@@ -52,14 +52,14 @@ digraph WeFlowRiskMap {
 
     a_pkg    [label="package.json\nbuild.afterPack (L115)", shape=note];
     a_after  [label="scripts/after-pack.cjs\ncopyKoffi / copyWcdb"];
-    a_dll    [label="wcdb_api.dll\n12.8 MB · gitignored (.gitignore:12)", shape=cylinder, fillcolor="#FFF8E1"];
+    a_dll    [label="native/wcdb-native/prebuilt/\nwcdb_api.dll · 12.8 MB · 已入库", shape=cylinder, fillcolor="#E8F5E9", color="#2E7D32"];
     a_core   [label="wcdbCore.getDllPath()\nDLL 候选解析", fillcolor="#E3F2FD"];
     a_ci     [label="release.yml\nnpm install → npx tsc → vite → builder"];
     a_lock   [label="package-lock / pnpm-lock\n双包管理器", shape=note];
     a_ws     [label="pnpm-workspace.yaml\nallowBuilds (gitignored)", shape=note];
 
     r_f01 [label="F-01 Critical\n[已修复] afterPack 路径\n(假 context 验证通过)", fillcolor="#E8F5E9", color="#2E7D32"];
-    r_f02 [label="F-02 High\n[已加固] CI 缺失即失败\nDLL 分发方式待决策", fillcolor="#FFF8E1", color="#E65100", penwidth=2];
+    r_f02 [label="F-02 High\n[已解决] DLL 入库 prebuilt\nCI 缺失仍硬失败", fillcolor="#E8F5E9", color="#2E7D32"];
     r_f03 [label="F-03 Medium\n[已修复] WCDB_DLL_PATH\n校验存在性", fillcolor="#E8F5E9", color="#2E7D32"];
     r_f06 [label="F-06 Medium\n[已修复] CI 跑 typecheck\n+ wcdb/render 测试", fillcolor="#E8F5E9", color="#2E7D32"];
     r_f10 [label="F-10 Medium\n锁文件与 overrides 分叉", fillcolor="#FFFDE7", color="#F9A825"];
@@ -77,10 +77,10 @@ digraph WeFlowRiskMap {
     u_publish [label="build.publish.owner\n= hicccc77", shape=note];
     u_remote  [label="git remote\n= jeremyleo798-stack/WeFlow", shape=note];
     u_signer  [label="electron-updater\nverifySignature", fillcolor="#E3F2FD"];
-    u_dialog  [label="UpdateDialog.tsx:102\ndangerouslySetInnerHTML", fillcolor="#E3F2FD"];
+    u_dialog  [label="UpdateDialog.tsx\nreleaseNotes React 渲染\n+ SHA-512/来源展示", fillcolor="#E8F5E9"];
 
     r_f04 [label="F-04 已澄清\n上游仓库 = hicccc77/WeFlow\n(本地 remote 是 fork)\n已加一致性检查", fillcolor="#E8F5E9", color="#2E7D32"];
-    r_f05 [label="F-05 High\n无签名 + 更新签名校验跳过\n(待证书)", fillcolor="#FFF3E0", color="#E65100", penwidth=2];
+    r_f05 [label="F-05 High\n无签名 + 更新签名校验跳过\n(已展示来源与 SHA-512)", fillcolor="#FFF3E0", color="#E65100", penwidth=2];
     r_f09 [label="F-09 Medium\n[已修复] Release 正文\n改为 React 节点渲染", fillcolor="#E8F5E9", color="#2E7D32"];
   }
 
@@ -91,13 +91,13 @@ digraph WeFlowRiskMap {
     color="#AD1457";
     fontcolor="#AD1457";
 
-    s_win    [label="BrowserWindow ×3\nwebSecurity:false (L1129/1555/1614)", fillcolor="#E3F2FD"];
-    s_csp    [label="index.html\n无 CSP / 无权限处理器", fillcolor="#E3F2FD"];
+    s_win    [label="BrowserWindow ×3\nwebSecurity:true (L1175/1601/1660)", fillcolor="#E8F5E9"];
+    s_csp    [label="CSP 构建期注入\n权限默认拒绝", fillcolor="#E8F5E9"];
     s_ipc    [label="preload.ts\n251 IPC 通道 / 299 调用点", fillcolor="#E3F2FD"];
     s_write  [label="file:writeBase64 (L2950)\nshell:openPath (L3061)", fillcolor="#E3F2FD"];
     s_http   [label="httpService\ntoken + timingSafeEqual + localhost CORS", fillcolor="#E8F5E9"];
 
-    r_f07 [label="F-07 High\nwebSecurity 全关 + 无 CSP\n(待媒体协议迁移)", fillcolor="#FFF3E0", color="#E65100", penwidth=2];
+    r_f07 [label="F-07 High\n[已修复] weflow-media 协议\nwebSecurity + CSP + 权限拒绝", fillcolor="#E8F5E9", color="#2E7D32"];
     r_f08 [label="F-08 High\n[已修复] 删除 writeBase64\nopenPath 加目录约束", fillcolor="#E8F5E9", color="#2E7D32"];
     r_f15 [label="F-15 Low\n[风险接受] 非回环为\n文档化选项 + 强制 token", fillcolor="#ECEFF1", color="#546E7A"];
   }
@@ -122,7 +122,7 @@ digraph WeFlowRiskMap {
   // ---------- 风险 → 架构元素 ----------
   r_f01 -> a_pkg   [label="曾引用已删除文件", color="#2E7D32", penwidth=1.6];
   r_f01 -> a_ci    [label="曾阻断发布构建", color="#2E7D32", penwidth=1.6];
-  r_f02 -> a_dll   [label="未入库"];
+  r_f02 -> a_dll   [label="已入库 prebuilt", color="#2E7D32"];
   r_f02 -> a_after [label="CI 缺失即失败"];
   r_f02 -> a_core  [label="回退候选落空"];
   r_f03 -> a_core  [label="失效 env 短路"];
@@ -135,6 +135,7 @@ digraph WeFlowRiskMap {
   r_f04 -> u_remote  [label="fork remote，预期差异"];
   r_f05 -> u_signer  [label="publisherName 缺失"];
   r_f05 -> u_feed    [label="仅 HTTPS 信任"];
+  r_f05 -> u_dialog  [label="展示哈希/来源", color="#E65100"];
   r_f09 -> u_dialog  [label="已移除 innerHTML"];
 
   r_f07 -> s_win   [label="关闭同源策略"];
@@ -191,7 +192,7 @@ digraph WeFlowRiskMap {
   p_trace -> q_security [style=dashed, color="#2E7D32", label="隐私正向"];
 
   // ---------- 待决策 ----------
-  d_dll [label="待决策 D-01\nDLL：入库 / Release asset / CI 编译 / 显式外部依赖", shape=hexagon, fillcolor="#FFF9C4", color="#F57F17"];
+  d_dll [label="已决策 D-01\nDLL 入库 native/wcdb-native/prebuilt", shape=hexagon, fillcolor="#E8F5E9", color="#2E7D32"];
   d_repo[label="已澄清 D-02\n发布源 = hicccc77/WeFlow（上游）", shape=hexagon, fillcolor="#E8F5E9", color="#2E7D32"];
   d_sign[label="待决策 D-03\n是否引入 Authenticode 签名", shape=hexagon, fillcolor="#FFF9C4", color="#F57F17"];
   d_dll  -> r_f02 [style=dashed];

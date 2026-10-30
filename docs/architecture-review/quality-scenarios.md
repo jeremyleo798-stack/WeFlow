@@ -7,7 +7,7 @@
 - 刺激：CI 从干净 clone 执行发布构建（无缓存、无本地 DLL）。
 - 响应：构建成功，产物包含 `wcdb_api.dll` 与 koffi 原生二进制；缺失任一即构建失败。
 - 度量：连续 2 次构建产物路径与 sha256 一致；DLL 缺失时退出码非 0。
-- 当前证据：`scripts/after-pack.cjs` 在 `CI=true` / `WCDB_DLL_REQUIRED=1` 时对缺失 DLL 或 koffi 抛错，并校验 DLL 体积、打印 sha256（F-02 已加固）；分发方式（入库/Release asset/CI 编译）待决策。
+- 当前证据：`after-pack.cjs` 在 `CI=true` / `WCDB_DLL_REQUIRED=1` 时对缺失 DLL 或 koffi 抛错，并校验 DLL 体积、打印 sha256；DLL 已入库 `native/wcdb-native/prebuilt/`（附来源与 sha256），干净 clone 可直接打包（F-02 已解决）。
 - 验证：`scripts/check-release-artifacts.cjs` 解包断言 <1 MB DLL 或缺失 koffi 时失败（已实现）。
 
 ## QS-02 可重复发布：本地与 CI 依赖树一致
@@ -23,7 +23,7 @@
 - 刺激：攻击者篡改 `latest.yml` 或替换安装包。
 - 响应：客户端拒绝安装并记录日志/提示用户。
 - 度量：篡改后更新失败率 100%；正常更新成功率 100%。
-- 当前证据：`NsisUpdater.verifySignature` 在 `publisherName == null` 时返回 null，签名校验被跳过；无 Authenticode 配置（缺口 F-05）。
+- 当前证据：`NsisUpdater.verifySignature` 在 `publisherName == null` 时返回 null，签名校验被跳过；无 Authenticode 配置（缺口 F-05）。补偿措施：更新弹窗展示下载来源与 SHA-512 供人工核对（已实现）。
 - 验证：本地搭建 generic feed，替换包后触发更新，观察日志与安装行为。
 
 ## QS-04 供应链完整性：更新源唯一且可解释
@@ -39,8 +39,8 @@
 - 刺激：渲染进程执行 `fetch('file:///C:/Windows/win.ini')` 或加载恶意远程资源。
 - 响应：请求被同源策略/CSP 拒绝，控制台报错。
 - 度量：三类窗口均拒绝；正常本地媒体播放不受影响。
-- 当前证据：三窗口 `webSecurity: false`，无 CSP（缺口 F-07）。
-- 验证：DevTools 手动执行 + Playwright/Electron 自动化断言。
+- 当前证据：三窗口 `webSecurity: true`；构建产物含 CSP meta（`connect-src` 不含 `file:`）；`fetch('file:///C:/Windows/win.ini')` 在真实构建中被 CSP 拒绝；本地媒体经 `weflow-media://` 协议加载，非白名单目录返回 403（F-07 已修复）。
+- 验证：真实构建内 CDP 已断言上述行为；正常图片/视频加载与 Range 播放通过。
 
 ## QS-06 运行安全：渲染进程无法任意写文件
 

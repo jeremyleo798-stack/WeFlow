@@ -5,6 +5,7 @@ import { SnsPost, SnsLinkCardData, SnsLocation } from '../../types/sns'
 import { Avatar } from '../Avatar'
 import { SnsMediaGrid } from './SnsMediaGrid'
 import { renderTextWithEmoji } from '../../utils/renderTextWithEmoji'
+import { toMediaUrl } from '../../utils/mediaUrl'
 import './SnsPostItem.scss'
 
 // Helper functions (extracted from SnsPage.tsx but simplified/reused)
@@ -278,7 +279,7 @@ const SnsLinkCard = ({ card, thumbKey }: { card: SnsLinkCardData; thumbKey?: str
                     return
                 }
                 if (result.videoPath) {
-                    setThumbSrc(`file://${result.videoPath.replace(/\\/g, '/')}`)
+                    setThumbSrc(toMediaUrl(result.videoPath))
                 }
             } catch {
                 // noop: keep raw thumb fallback
@@ -370,9 +371,7 @@ const CommentEmoji: React.FC<{
                 })
                 if (cancelled) return
                 if (res.success && res.localPath) {
-                    const fileUrl = res.localPath.startsWith('file:')
-                        ? res.localPath
-                        : `file://${res.localPath.replace(/\\/g, '/')}`
+                    const fileUrl = toMediaUrl(res.localPath)
                     emojiLocalCache.set(cacheKey, fileUrl)
                     setLocalSrc(fileUrl)
                 }

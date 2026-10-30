@@ -11,6 +11,7 @@ import { homedir } from 'os'
 import { app, BrowserWindow } from 'electron'
 import { ConfigService } from './config'
 import { wcdbService } from './wcdbService'
+import { mediaUrlToPath } from '../mediaUrl'
 import { MessageCacheService } from './messageCacheService'
 import { ContactCacheService, ContactCacheEntry, buildStableAccountCacheScope } from './contactCacheService'
 import { SessionStatsCacheService, SessionStatsCacheEntry, SessionStatsCacheStats } from './sessionStatsCacheService'
@@ -9997,10 +9998,8 @@ class ChatService {
         return { success: true, data: base64Data }
       }
 
-      // localPath 是 file:// URL，需要转换成文件路径
-      const filePath = result.localPath.startsWith('file://')
-        ? result.localPath.replace(/^file:\/\//, '')
-        : result.localPath
+      // localPath 可能是原始路径或 file:// / weflow-media:// URL，统一还原成文件路径
+      const filePath = mediaUrlToPath(result.localPath) || result.localPath
 
       const imageData = readFileSync(filePath)
       return { success: true, data: imageData.toString('base64') }

@@ -11,6 +11,7 @@ import { useBatchImageDecryptStore } from '../stores/batchImageDecryptStore'
 import type { ChatRecordItem, ChatSession, Message } from '../types/models'
 import type { GroupSummaryRecord, GroupSummaryRecordSummary } from '../types/electron'
 import { renderTextWithEmoji } from '../utils/renderTextWithEmoji'
+import { toMediaUrl } from '../utils/mediaUrl'
 import { displayNameOrFallback, pickDisplayName } from '../utils/displayName'
 import { isAgentEligibleSession } from '../utils/agentScope'
 import { isEligiblePrivateFriendSession } from '../features/relationship-achievements'
@@ -328,16 +329,7 @@ function hasRenderableChatRecordName(value?: string): boolean {
 function toRenderableImageSrc(path?: string): string | undefined {
   const raw = String(path || '').trim()
   if (!raw) return undefined
-  if (/^(data:|blob:|https?:|file:)/i.test(raw)) return raw
-
-  const normalized = raw.replace(/\\/g, '/')
-  if (/^[a-zA-Z]:\//.test(normalized)) {
-    return encodeURI(`file:///${normalized}`)
-  }
-  if (normalized.startsWith('/')) {
-    return encodeURI(`file://${normalized}`)
-  }
-  return raw
+  return toMediaUrl(raw)
 }
 
 function getChatRecordPreviewText(item: ChatRecordItem): string {
@@ -8062,7 +8054,7 @@ function ChatPage(props: ChatPageProps) {
             } else if (proxyResult.success && proxyResult.videoPath) {
               previews.push({
                 id: `${post.id}-${previews.length}`,
-                src: `file://${proxyResult.videoPath.replace(/\\/g, '/')}`,
+                src: toMediaUrl(proxyResult.videoPath),
                 kind: 'video'
               })
             }
@@ -10694,7 +10686,7 @@ function QuotedEmoji({
 
   if (error || (!loading && !localPath)) return <span className="quoted-type-label">[动画表情]</span>
   if (loading) return <span className="quoted-type-label">[动画表情]</span>
-  return <img src={localPath} alt="动画表情" className="quoted-emoji-image" loading="lazy" decoding="async" />
+  return <img src={toMediaUrl(localPath)} alt="动画表情" className="quoted-emoji-image" loading="lazy" decoding="async" />
 }
 
 // 消息气泡组件
@@ -10884,10 +10876,10 @@ function MessageInsightControl({
 
 function AvatarProfileMomentThumb({ preview }: { preview: AvatarProfileMomentPreview }) {
   if (preview.kind === 'video') {
-    return <video src={preview.src} muted preload="metadata" playsInline />
+    return <video src={toMediaUrl(preview.src)} muted preload="metadata" playsInline />
   }
 
-  return <img src={preview.src} alt="" loading="lazy" referrerPolicy="no-referrer" />
+  return <img src={toMediaUrl(preview.src)} alt="" loading="lazy" referrerPolicy="no-referrer" />
 }
 
 function AvatarProfileCard({
@@ -13644,7 +13636,7 @@ function MessageBubble({
       return (
         <div className="emoji-message-wrapper" ref={emojiContainerRef}>
           <img
-            src={emojiLocalPath}
+            src={toMediaUrl(emojiLocalPath)}
             alt="表情"
             className="emoji-image"
             onLoad={() => {

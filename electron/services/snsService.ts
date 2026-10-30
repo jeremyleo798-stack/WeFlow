@@ -1440,7 +1440,7 @@ class SnsService {
 
         const result = await this.fetchAndDecryptImage(url, key)
         if (result.success) {
-            // 如果是视频，返回本地文件路径 (需配合 webSecurity: false 或自定义协议)
+            // 视频返回本地缓存路径，渲染进程会经 weflow-media 协议加载
             if (result.contentType?.startsWith('video/')) {
                 // Return cachePath directly for video
                 // 注意：fetchAndDecryptImage 需要修改以返回 cachePath

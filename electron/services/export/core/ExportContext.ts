@@ -26,13 +26,13 @@ import * as path from 'path'
 import * as http from 'http'
 import * as https from 'https'
 import crypto from 'crypto'
-import { fileURLToPath } from 'url'
 import ExcelJS from 'exceljs'
 import { getEmojiPath } from 'wechat-emojis'
 import { ConfigService } from '../../config'
 import { wcdbService } from '../../wcdbService'
 import { imageDecryptService } from '../../imageDecryptService'
 import { chatService } from '../../chatService'
+import { mediaUrlToPath } from '../../../mediaUrl'
 import { videoService } from '../../videoService'
 import { voiceTranscribeService } from '../../voiceTranscribeService'
 import { exportRecordService } from '../../exportRecordService'
@@ -3161,8 +3161,8 @@ export class ExportContext {
               relativePath: path.posix.join(mediaRelativePrefix, 'images', fileName),
               kind: 'image'
             }
-          } else if (sourcePath.startsWith('file://')) {
-            sourcePath = fileURLToPath(sourcePath)
+          } else if (/^(file|weflow-media):/i.test(sourcePath)) {
+            sourcePath = mediaUrlToPath(sourcePath) || sourcePath
           }
 
           // 复制文件
@@ -5233,9 +5233,11 @@ export class ExportContext {
           return { data, ext, mime }
         }
 
-        if (avatarUrl.startsWith('file://')) {
+        if (/^(file|weflow-media):/i.test(avatarUrl)) {
           try {
-            const sourcePath = fileURLToPath(avatarUrl)
+            const resolvedAvatarPath = mediaUrlToPath(avatarUrl)
+            if (!resolvedAvatarPath) return null
+            const sourcePath = resolvedAvatarPath
             const ext = path.extname(sourcePath) || '.jpg'
             return { sourcePath, ext }
           } catch {

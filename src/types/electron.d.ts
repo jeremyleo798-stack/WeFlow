@@ -539,11 +539,11 @@ export interface ElectronAPI {
       reason?: string
       error?: string
     }>
-    checkForUpdates: () => Promise<{ hasUpdate: boolean; version?: string; releaseNotes?: string }>
+    checkForUpdates: () => Promise<{ hasUpdate: boolean; version?: string; releaseNotes?: string; minimumVersion?: string; sha512?: string; downloadUrl?: string }>
     downloadAndInstall: () => Promise<void>
     ignoreUpdate: (version: string) => Promise<{ success: boolean }>
     onDownloadProgress: (callback: (progress: number) => void) => () => void
-    onUpdateAvailable: (callback: (info: { version: string; releaseNotes: string }) => void) => () => void
+    onUpdateAvailable: (callback: (info: { version: string; releaseNotes: string; minimumVersion?: string; sha512?: string; downloadUrl?: string }) => void) => () => void
   }
   notification: {
     show: (data: { title: string; content: string; avatarUrl?: string; sessionId: string; channel?: string; insightRecordId?: string; targetRoute?: string }) => Promise<{ success?: boolean; error?: string } | void>

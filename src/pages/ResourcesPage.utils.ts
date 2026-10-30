@@ -1,3 +1,5 @@
+import { toMediaUrl } from '../utils/mediaUrl'
+
 export type MediaTab = 'image' | 'video'
 
 export interface MediaStreamItem {
@@ -146,19 +148,5 @@ export function extractVideoMd5(content?: string): string {
 }
 
 export function toRenderableMediaSrc(rawPath?: string): string {
-  const src = String(rawPath || '').trim()
-  if (!src) return ''
-  if (/^(data:image\/|blob:|https?:\/\/)/i.test(src)) {
-    return src
-  }
-  if (/^file:\/\//i.test(src)) {
-    return src.replace(/#/g, '%23')
-  }
-  if (src.startsWith('/')) {
-    return encodeURI(`file://${src}`).replace(/#/g, '%23')
-  }
-  if (/^[a-zA-Z]:[\\/]/.test(src)) {
-    return encodeURI(`file:///${src.replace(/\\/g, '/')}`).replace(/#/g, '%23')
-  }
-  return encodeURI(`file://${src.startsWith('/') ? '' : '/'}${src.replace(/\\/g, '/')}`).replace(/#/g, '%23')
+  return toMediaUrl(rawPath)
 }

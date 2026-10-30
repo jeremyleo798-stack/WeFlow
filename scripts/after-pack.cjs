@@ -1,6 +1,6 @@
 // pnpm 安装时 koffi 的平台二进制不在依赖树里，electron-builder 不会收进包；
 // koffi 会到 process.resourcesPath/koffi/<triplet>/koffi.node 兜底查找，这里补上。
-// 同时补齐 WCDB 原生库（native/wcdb-native/dist/wcdb_api.dll），
+// 同时补齐 WCDB 原生库（native/wcdb-native/prebuilt/wcdb_api.dll），
 // 供未配置 wcdbLibPath 的机器直接使用内置实现。
 const fs = require('node:fs')
 const path = require('node:path')
@@ -48,8 +48,8 @@ function copyWcdb(context, resourcesDir) {
   if (context.electronPlatformName !== 'win32') return
   const source = process.env.WCDB_DLL_SOURCE
     ? path.resolve(process.env.WCDB_DLL_SOURCE)
-    : path.join(context.packager.projectDir, 'native', 'wcdb-native', 'dist', 'wcdb_api.dll')
-  const missingMessage = `[after-pack] wcdb_api.dll not found at ${source}; set WCDB_DLL_SOURCE to a built DLL or commit the bundled binary`
+    : path.join(context.packager.projectDir, 'native', 'wcdb-native', 'prebuilt', 'wcdb_api.dll')
+  const missingMessage = `[after-pack] wcdb_api.dll not found at ${source}; rebuild native/wcdb-native or set WCDB_DLL_SOURCE`
   if (!fs.existsSync(source)) {
     if (requireNativeArtifacts()) throw new Error(missingMessage)
     console.warn(`${missingMessage}; release requires a configured wcdbLibPath`)

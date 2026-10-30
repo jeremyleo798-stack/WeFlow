@@ -15,9 +15,9 @@
 这次改动方向正确：便携包改为单文件 exe、启用 asar + Electron fuses、WCDB 原生库内置、类型错误清零。审查发现的发布链路问题已按 P0→P3 处理，当前状态：
 
 1. **发布构建阻断（已修复）**：`HEAD` 的 `package.json:115` 曾指向已删除的 `scripts/after-pack-koffi.cjs`；现已改为 `scripts/after-pack.cjs`，并用假 context 验证 DLL/koffi 均能复制。
-2. **内置 DLL 缺失不再静默（已加固）**：`native/wcdb-native/dist/wcdb_api.dll`（12.8 MB）仍被 `.gitignore:12` 忽略，但 CI 构建缺失时会直接失败，打包后还有产物检查兜底。**DLL 最终分发方式仍待决策**（提交入库 / Release asset / CI 编译 Rust）。
-3. **更新供应链（部分处理）**：feed、`build.publish`、`repository.url` 与 README 实际都指向 `hicccc77/WeFlow`（上游正式仓库），本地 remote 是 fork，并非配置漂移；已新增一致性检查。未签名与 `publisherName` 缺失仍使 `electron-updater` 跳过签名校验，需证书才能闭环。
-4. **安全纵深（部分修复）**：更新说明已改为纯 React 节点渲染并加回归测试；未使用的 `file:writeBase64` 已删除，`shell:openPath` 已加目录/realpath 约束。`webSecurity:false` 与 CSP 仍需先完成本地媒体自定义协议迁移，未强行翻转。
+2. **内置 DLL 可复现（已解决）**：DLL 已入库到 `native/wcdb-native/prebuilt/wcdb_api.dll`（12.8 MB，附来源与 sha256 说明），干净 clone 可直接打包；`after-pack.cjs` 优先读该路径，CI 缺失仍硬失败，打包后还有产物检查兜底。
+3. **更新供应链（部分处理）**：feed、`build.publish`、`repository.url` 与 README 实际都指向 `hicccc77/WeFlow`（上游正式仓库），本地 remote 是 fork，并非配置漂移；已新增一致性检查。未签名与 `publisherName` 缺失仍使 `electron-updater` 跳过签名校验，当前方案是在更新弹窗展示下载来源与 SHA-512 供人工核对，待证书到位再切换为强制校验。
+4. **安全纵深（已修复）**：更新说明已改为纯 React 节点渲染并加回归测试；未使用的 `file:writeBase64` 已删除，`shell:openPath` 已加目录/realpath 约束；本地媒体迁移到 `weflow-media://` 特权协议（每次请求做 realpath 目录包含校验），三个窗口恢复 `webSecurity: true`，生产构建注入 CSP，`setPermissionRequestHandler` / `setPermissionCheckHandler` 默认拒绝（仅放行 `clipboard-sanitized-write`）。
 
 其余为中等优先级的可维护性、安全纵深与质量门禁问题，详见发现清单。
 
@@ -39,13 +39,13 @@
 
 | ID | 严重度 | 可能性 | 影响 | 置信度 | 问题 | 状态 |
 | --- | --- | --- | --- | --- | --- | --- |
-| F-01 | Critical | 确定 | 高 | high | afterPack 指向已删除脚本，发布构建直接失败 | 已修复（待提交） |
-| F-02 | High | 确定（CI） | 高 | high | 内置 DLL 被 gitignore，缺失时打包只告警 | 已加固；DLL 分发方式待决策 |
-| F-03 | Medium | 中 | 中 | high | `WCDB_DLL_PATH` 未校验存在性即短路返回 | 已修复（待提交） |
+| F-01 | Critical | 确定 | 高 | high | afterPack 指向已删除脚本，发布构建直接失败 | 已修复（提交 8540dc2） |
+| F-02 | High | 确定（CI） | 高 | high | 内置 DLL 曾被 gitignore，缺失时打包只告警 | 已解决：DLL 入库 prebuilt，CI 缺失仍硬失败 |
+| F-03 | Medium | 中 | 中 | high | `WCDB_DLL_PATH` 未校验存在性即短路返回 | 已修复（提交 8540dc2） |
 | F-04 | High→Info | 确定 | 高 | high | 更新/发布目标仓库与 origin 不一致 | 已澄清：hicccc77 为上游正式仓库；新增一致性检查 |
-| F-05 | High | 中 | 高 | high | 未签名 + 更新签名校验被跳过 | 待证书；风险已记录 |
+| F-05 | High | 中 | 高 | high | 未签名 + 更新签名校验被跳过 | 已决策：自用/朋友分发不做证书；portable 不支持自动更新，保留来源 + SHA-512 提示 |
 | F-06 | Medium | 高 | 中高 | high | 发布 CI 不跑 electron 类型检查与测试 | 已修复 |
-| F-07 | High | 中 | 高 | high | 三个窗口 `webSecurity:false` 且无 CSP | 待协议迁移，未翻转 |
+| F-07 | High | 中 | 高 | high | 三个窗口 `webSecurity:false` 且无 CSP | 已修复：weflow-media 协议 + webSecurity + CSP + 权限处理器 |
 | F-08 | High | 低-中 | 高 | high | 渲染进程可写任意路径、打开任意本地路径 | 已修复 |
 | F-09 | Medium | 低-中 | 中 | high | 更新说明以 HTML 直接注入渲染进程 | 已修复 + 回归测试 |
 | F-10 | Medium | 高 | 中 | high | npm/pnpm 双包管理器、锁文件与 overrides 分叉 | 未处理 |
@@ -70,7 +70,8 @@
   - A. 将 DLL 作为发布资产/构建输入管理（提交到仓库、Release asset 下载或 CI 编译 Rust），并在 `afterPack` 缺失时 **抛错终止**；
   - B. 明确“不内置”，删除 `after-pack.cjs` 的拷贝逻辑与 `wcdbCore` 的 bundled 候选，改为强制配置，避免误导。
 - 不建议保持现状：代码声称内置，仓库却无法复现内置。
-- 现状（2026-10-30）：已消除“静默降级”。`after-pack.cjs` 在 `CI=true` 或 `WCDB_DLL_REQUIRED=1` 时缺失 DLL/koffi 直接抛错；DLL 小于 1 MB（如 LFS 指针）始终失败；支持 `WCDB_DLL_SOURCE` 指向外部 DLL；成功后打印 sha256。新增 `scripts/check-release-artifacts.cjs` 在打包后再次校验产物。**仍待决策**：DLL 最终以“提交入库 / Release asset / CI 编译 Rust”哪种方式进入构建。
+- 现状（2026-10-30）：已消除“静默降级”。`after-pack.cjs` 在 `CI=true` 或 `WCDB_DLL_REQUIRED=1` 时缺失 DLL/koffi 直接抛错；DLL 小于 1 MB（如 LFS 指针）始终失败；支持 `WCDB_DLL_SOURCE` 指向外部 DLL；成功后打印 sha256。新增 `scripts/check-release-artifacts.cjs` 在打包后再次校验产物。
+- 决策（2026-10-30）：采用“提交入库”。DLL 移至 `native/wcdb-native/prebuilt/`（不受 `dist` 忽略规则影响），附 `README.md` 记录构建方式、rustc commit、大小与 sha256；`after-pack.cjs` 默认源改为该路径，`WCDB_DLL_SOURCE` 仍可覆盖。假 context 验证：默认源复制成功（sha256 `55120c34…`），CI 下源缺失退出码 1。
 
 ### F-03 WCDB_DLL_PATH 未校验存在性
 
@@ -97,6 +98,7 @@
   - 更新走 `setFeedURL({ provider: 'generic', ... })`（`main.ts:518-522`）。
 - 影响：Windows 用户首次运行会有 SmartScreen 警告；更新包的真实性只依赖 HTTPS 与目标仓库控制权，一旦仓库/CI 被攻破，恶意更新会被静默安装。
 - 建议：至少配置 Authenticode 签名 + `win.publisherName`；短期无法签名时，在发布文档中显式记录该风险，并考虑在应用内展示更新包哈希。
+- 现状（2026-10-30）：按“暂无证书”处理。主进程检查更新时附带 `sha512`、下载地址与文件名（`getUpdateVerification`），更新弹窗在说明下方展示“此更新包未做代码签名，请核对下载来源与 SHA-512”；证书到位后再配置 `publisherName` 并移除该提示。
 
 ### F-06 发布 CI 不跑 electron 类型检查与测试
 
@@ -107,9 +109,10 @@
 
 ### F-07 `webSecurity:false` + 无 CSP
 
-- 证据：`electron/main.ts:1129`（主窗口）、`1555`（视频窗口）、`1614`（图片查看器）均 `webSecurity: false`；`index.html` 无 CSP meta；`main.ts` 无 `onHeadersReceived` 注入 CSP、无 `setPermissionRequestHandler`。
+- 证据（修复前）：`electron/main.ts` 主窗口、视频窗口、图片查看器均 `webSecurity: false`；`index.html` 无 CSP meta；无 `onHeadersReceived` CSP 注入、无 `setPermissionRequestHandler`。
 - 影响：关闭同源策略后，渲染进程中的任何注入点（见 F-09）都能读取任意 `file://` 内容并发起跨域请求；配合 F-08 的任意路径写入，可升级为本地文件窃取/覆盖。
 - 建议：用自定义协议（`protocol.handle`）服务本地媒体，恢复 `webSecurity: true`；加 CSP（至少 `default-src 'self'`、限制 `img-src`/`media-src` 到自定义协议）；补权限处理器。
+- 现状：已执行。新增 `electron/mediaProtocol.ts` / `electron/mediaUrl.ts`：`weflow-media://` 注册为 standard/secure/CORS 特权 scheme，只放行 userData、temp、`Documents/WeFlow`、配置的 `cachePath`/`dbPath` 内的文件（每次请求 realpath 归一后做目录包含校验，拒绝时 403）；支持 Range/206 与 HEAD。主进程所有媒体 URL 生产点与渲染进程所有 `file://` 消费点均改走该协议（`src/utils/mediaUrl.ts` 统一转换）。三个窗口 `webSecurity: true`；`vite.config.ts` 在构建时注入 CSP（`script-src 'self'`、`connect-src` 不含 `file:`、`img-src`/`media-src` 含 `weflow-media:`）；主会话默认拒绝权限申请，仅放行 `clipboard-sanitized-write`。
 
 ### F-08 渲染进程可达的任意路径写入/打开
 
@@ -172,7 +175,7 @@
 | --- | --- | --- |
 | 发布可重复性 | 双包管理器 + 未入库构建输入（DLL、allowBuilds） | F-02、F-10、F-11 |
 | 供应链完整性 | 无签名、feed 指向他仓、更新说明可注入 | F-04、F-05、F-09 |
-| 安全边界 | contextIsolation/fuses 到位；但 webSecurity 全关、IPC 路径无约束、无 CSP | F-07、F-08、F-15 |
+| 安全边界 | contextIsolation/fuses 到位；webSecurity 已恢复、协议化媒体 + CSP + 权限默认拒绝；IPC 路径有约束 | F-07 已修复；F-15 风险接受 |
 | 可维护性 | 主进程单体、IPC 无契约 | F-12 |
 | 可测试性 | 仅两个 smoke 脚本，发布路径零覆盖 | F-13 |
 | 可观测性 | WCDB 有 `userData/logs/wcdb.log` 与 `traceKeyFlow`（仅记录布尔值，无密钥材料） | 正向；但无更新/打包诊断日志 |
@@ -194,8 +197,8 @@ WeFlow 是本地优先的微信数据归档与分析桌面应用，涉及聊天�
 | 项 | 类型 | 需要的验证 |
 | --- | --- | --- |
 | ~~实际发布仓库~~ | 已澄清 | `repository.url`、README、`build.publish`、feed 均为 `hicccc77/WeFlow`；本地 remote 为 fork |
-| 是否有代码签名证书计划 | 未知 | 产品/发布决策 |
-| DLL 的正式分发方式（入库/Release asset/CI 编译） | 未决 | 需用户决策，见 F-02 |
+| 是否有代码签名证书计划 | 暂无证书（已确认） | 证书到位后配置 `publisherName` 并恢复强制校验 |
+| ~~DLL 的正式分发方式~~ | 已决策 | 提交入库到 `native/wcdb-native/prebuilt/`，见 F-02 |
 | 用户是否依赖 `WCDB_DLL_PATH` 指向自编译实现 | 假设：少量高级用户 | 查文档/Issue |
 | 仓库可见性（public/private） | 未知（`gh` 查询被权限拦截） | 人工确认；影响 F-05 严重度 |
 
@@ -210,30 +213,33 @@ WeFlow 是本地优先的微信数据归档与分析桌面应用，涉及聊天�
 
 ## 8. 建议的下一步
 
-1. 提交本轮修复（工作区尚未提交），然后在发版机跑一次 `build:portable` 做完整产物级验证。
-2. 就 F-02 做决策：内置 DLL 必须在 CI 可复现（提交入库 / Release asset / CI 编译），否则改为显式外部依赖。当前 CI 会因 DLL 缺失而失败，这是有意为之。
-3. 评估签名方案（F-05），这是上线前的信任链底线。
-4. 规划 F-07：把渲染进程的 `file://` 媒体加载迁移到自定义协议后，再恢复 `webSecurity: true` 并加 CSP；单独翻转会破坏图片/视频/语音播放。
-5. 持续推进 F-10/F-11/F-12：统一包管理器与锁文件、把 IPC 注册契约化。
-6. 如需要，重新加入 `AGENTS.md` 版本控制（先移除 `.gitignore:69` 的忽略规则）。
+1. 提交本轮改动，然后在发版机跑一次 `build:portable` 做完整产物级验证。
+2. 签名项已决策不做（自用/朋友分发）：发布产物为 portable 单文件 exe，`electron-updater@6.8.11` 不支持该目标（安装走 NSIS），当前只能手动替换 exe；保留“未签名 + SHA-512 + 来源”提示。若未来改为 NSIS 安装版分发，再配置 Authenticode + `win.publisherName` 恢复强制校验。
+3. F-07 已完成：媒体迁移到 `weflow-media://` 协议，`webSecurity: true` + CSP + 权限默认拒绝均已落地并在真实构建中验证；剩余验证项见 §9 的 R-07 记录。
+4. 持续推进 F-10/F-11/F-12：统一包管理器与锁文件、把 IPC 注册契约化。
+5. 如需要，重新加入 `AGENTS.md` 版本控制（先移除 `.gitignore:69` 的忽略规则）。
 
 ## 9. 修复执行记录（2026-10-30）
 
 | 项 | 改动 | 验证 |
 | --- | --- | --- |
 | F-01 | `package.json` afterPack 改回 `scripts/after-pack.cjs` | 假 context 执行 afterPack 成功 |
-| F-02 | `after-pack.cjs`：CI 缺失 DLL/koffi 抛错；支持 `WCDB_DLL_SOURCE`；DLL <1 MB 拒绝；打印 sha256 | CI 模拟缺 DLL 失败、本地仅告警均符合预期 |
+| F-02 | `after-pack.cjs`：CI 缺失 DLL/koffi 抛错；支持 `WCDB_DLL_SOURCE`；DLL <1 MB 拒绝；打印 sha256；DLL 入库 `native/wcdb-native/prebuilt/`（附 sha256 说明），默认源改为该路径 | 默认源复制成功（sha256 `55120c34…`）、CI 缺失退出码 1 |
 | F-03 | `wcdbCore.getDllPath()` 校验 `WCDB_DLL_PATH` 存在性 | `npm run typecheck` 通过 |
 | F-04 | 新增 `scripts/check-release-config.cjs`，release 工作流入口校验 | 脚本输出 OK |
 | F-06 | release.yml 四个构建任务改跑 `typecheck` + `test:wcdb` + `test:release-notes`；`build:portable` 补 electron 类型检查 | 本地等价命令通过 |
 | F-08 | 删除未使用的 `file:writeBase64`；`shell:openPath` 增加目录/realpath 约束 | 类型检查通过；渲染层调用点均在允许目录 |
 | F-09 | 新增 `releaseNotes.tsx`，移除 `dangerouslySetInnerHTML` | `test:release-notes` 恶意输入断言通过 |
-| F-13 | 新增 release config / artifacts / release-notes 三项检查并接入 CI | artifacts 检查对现有 `release-out` 通过，对残缺产物失败 |
+| F-13 | 新增 release config / artifacts / release-notes 三项检查并接入 CI | artifacts 检查对现有 `release/win-unpacked` 通过，对残缺产物失败 |
+| F-05 | 检查更新载荷增加 `sha512`/下载地址；更新弹窗展示未签名提示与校验信息 | 组件级渲染测试通过（含注入防护）；未在真实更新流程中验证 |
 | F-14 | 新增 `AGENTS.md`（本地生效；仓库 `.gitignore:69` 显式忽略该文件，是否入库需维护者决定） | — |
 | F-15 | 风险接受，保留文档化 `0.0.0.0` 选项与 query token | 代码核对 |
+| F-07 (R-07) | 新增 `electron/mediaProtocol.ts`、`electron/mediaUrl.ts`、`src/utils/mediaUrl.ts`；主/渲染进程媒体 URL 全量迁移到 `weflow-media://`；三窗口 `webSecurity: true`；构建期注入 CSP；权限处理器默认拒绝 | 真实构建内 CDP 验证：图片/视频经协议加载（1×1、160×120）、Range 返回 206、越权路径 403、缺失文件 404、`fetch('file://…')` 被 CSP 阻断、剪贴板在用户手势下可写、首页/侧边栏正常渲染；`npm run typecheck` 通过 |
 
-验证汇总：`npm run typecheck` 0 错误；`test:wcdb` 46/46；agent sampling 7/7；`test:release-notes` 通过；release-config 通过；release-artifacts 对 `release-out/win-unpacked` 通过；`npx vite build` 通过（含新 `releaseNotes.tsx`）。
+验证汇总：`npm run typecheck` 0 错误；`test:wcdb` 46/46；agent sampling 7/7；`test:release-notes` 通过（含 UpdateDialog 的未签名提示与 SHA-512 渲染断言）；release-config 通过；release-artifacts 对 `release/win-unpacked` 通过；`npx vite build` 通过（含新 `releaseNotes.tsx` 与弹窗样式）。R-07：真实构建内 CDP 验证协议与 CSP 行为（见上表 F-07 行）；`npm run typecheck` 通过。
 
-尚未执行：完整 `electron-builder` 打包（仅用假 context 验证 afterPack）、应用内更新弹窗真实渲染验证（仅组件级渲染检查）、`risk-map.dot` 的 Graphviz 渲染（本机未安装 graphviz，仅做结构校验）。
+尚未执行：应用内更新弹窗真实渲染验证（仅组件级渲染检查；且 portable 分发不支持自动更新，真实升级链路不可用）、`risk-map.dot` 的 Graphviz 渲染（本机未安装 graphviz，仅做结构校验）；R-07 的真实微信数据链路（聊天图片解密 → 协议加载、图片查看器/视频窗口、朋友圈视频封面的 crossOrigin 抽帧）因本机无已配置的微信数据，仅验证了协议层与渲染层机制，未跑真实会话数据。
+
+已补执行（2026-10-30）：完整 `build:portable` 打包成功（`release/WeFlow.exe`，185,417,021 bytes），`check-release-artifacts.cjs` 对 `release/win-unpacked` 通过（DLL 12,839,447 bytes、koffi 1,051,648 bytes）；解包版与便携 exe 均真实启动并截图确认渲染，打包版内 CSP、`weflow-media` 加载、403 containment、`fetch('file://…')` 阻断均复验通过。
 
 配套文件：`risk-map.dot`（风险关系图）、`remediation-plan.md`（修复排期与验收）、`quality-scenarios.md`（质量场景）。

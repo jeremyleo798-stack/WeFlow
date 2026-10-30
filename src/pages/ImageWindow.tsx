@@ -3,12 +3,15 @@ import { useSearchParams } from 'react-router-dom'
 import { ZoomIn, ZoomOut, RotateCw, RotateCcw } from 'lucide-react'
 import { LivePhotoIcon } from '../components/LivePhotoIcon'
 import TitleBar from '../components/TitleBar'
+import { toMediaUrl } from '../utils/mediaUrl'
 import './ImageWindow.scss'
 
 export default function ImageWindow() {
     const [searchParams] = useSearchParams()
-    const imagePath = searchParams.get('imagePath')
-    const liveVideoPath = searchParams.get('liveVideoPath')
+    const imagePathParam = searchParams.get('imagePath')
+    const liveVideoPathParam = searchParams.get('liveVideoPath')
+    const imagePath = imagePathParam ? toMediaUrl(imagePathParam) : null
+    const liveVideoPath = liveVideoPathParam ? toMediaUrl(liveVideoPathParam) : null
     const hasLiveVideo = !!liveVideoPath
 
     const [isPlayingLive, setIsPlayingLive] = useState(false)

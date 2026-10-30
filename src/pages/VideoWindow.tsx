@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Play, Pause, Volume2, VolumeX, RotateCcw } from 'lucide-react'
+import { toMediaUrl } from '../utils/mediaUrl'
 import './VideoWindow.scss'
 
 export default function VideoWindow() {
     const [searchParams] = useSearchParams()
-    const videoPath = searchParams.get('videoPath')
+    const videoPathParam = searchParams.get('videoPath')
+    const videoPath = videoPathParam ? toMediaUrl(videoPathParam) : null
     const [isPlaying, setIsPlaying] = useState(false)
     const [isMuted, setIsMuted] = useState(false)
     const [currentTime, setCurrentTime] = useState(0)

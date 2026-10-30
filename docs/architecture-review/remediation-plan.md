@@ -7,12 +7,12 @@
 | 事项 | 状态 | 证据 |
 | --- | --- | --- |
 | R-01 afterPack 路径 | 已完成（工作区） | 假 context 运行复制 DLL + koffi 成功 |
-| R-02 DLL 分发 | 已加固，待决策 | CI 缺失即失败；分发方式未定 |
+| R-02 DLL 分发 | 已完成 | DLL 入库 `native/wcdb-native/prebuilt/`；CI 缺失即失败 |
 | R-03 WCDB_DLL_PATH 校验 | 已完成（工作区） | typecheck 0 错误 |
 | R-04 发布源对齐 | 已澄清 + 已加检查 | `check-release-config.cjs` OK |
-| R-05 签名 | 未执行 | 需证书决策 |
+| R-05 签名 | 已决策：不做（自用/朋友分发） | portable 分发不支持自动更新；保留来源与 SHA-512 提示 |
 | R-06 CI 质量门禁 | 已完成（工作区） | release.yml 4 个 job 均接入 |
-| R-07 webSecurity/CSP | 缓期 | 需媒体协议迁移 |
+| R-07 webSecurity/CSP | 已完成 | `weflow-media://` 特权协议 + `webSecurity: true` + 构建期 CSP + 权限默认拒绝 |
 | R-08 IPC 路径能力 | 已完成（工作区） | 删除 writeBase64；openPath 目录约束 |
 | R-09 更新说明渲染 | 已完成（工作区） | `test:release-notes` 通过 |
 | R-10 HTTP 边界 | 风险接受 | 0.0.0.0 为文档化选项 |
@@ -31,16 +31,10 @@
   - `npm run build:portable` 完成且产物内存在 `resources/resources/native/wcdb-native/dist/wcdb_api.dll` 与 `resources/koffi/<triplet>/koffi.node`。
 - 风险：`build:portable` 耗时较长；可先只跑 `electron-builder --dir` 验证 afterPack。
 
-### R-02 决策并落实 DLL 分发方式（F-02）· 已加固，待决策
+### R-02 决策并落实 DLL 分发方式（F-02）· 已完成
 
-- 已做：`after-pack.cjs` 在 `CI=true` 或 `WCDB_DLL_REQUIRED=1` 时，DLL/koffi 缺失或 DLL < 1 MB 直接抛错；支持 `WCDB_DLL_SOURCE` 指向外部构建产物；打印 sha256。本地构建仍仅告警。
-- 剩余：从 A/B/C 中选定一种并落到 CI（当前 CI 会因 `native/wcdb-native/dist/wcdb_api.dll` 未入库而失败，需先提供二进制）。
-- 选项：
-  - **A（推荐）** CI 内构建 Rust DLL（`cargo build --release -p wcdb_api`），`after-pack.cjs` 找不到 DLL 时 **抛错**；
-  - **B** 将 `wcdb_api.dll` 作为 Release asset，CI 构建前下载并校验 sha256，缺失同样抛错；
-  - **C** 明确不内置：删除 `copyWcdb` 与 bundled 候选路径，启动时提示配置 `wcdbLibPath`。
-- 验收：从干净 clone 执行与 release 相同的命令，产物内 DLL 存在（A/B）或应用给出明确可操作提示（C）；`after-pack.cjs` 不再出现“缺失仍成功”的分支。
-- 注意：DLL 为 12.8 MB 二进制，若选 A/B，需在文档中记录来源、版本与校验值。
+- 已做：采用“提交入库”。DLL 移至 `native/wcdb-native/prebuilt/wcdb_api.dll`（`prebuilt/README.md` 记录构建方式、rustc commit、大小与 sha256），`after-pack.cjs` 默认源改为该路径；`WCDB_DLL_SOURCE` 仍可覆盖；CI 缺失或 DLL < 1 MB 直接抛错并打印 sha256。
+- 验收：假 context 默认源复制成功（12,839,447 bytes，sha256 `55120c34…`）；`CI=true` + 缺失源退出码 1。
 
 ### R-03 提交 WCDB_DLL_PATH 存在性校验（F-03）· 已完成
 
@@ -53,12 +47,13 @@
 
 - 结论：发布源为上游 `hicccc77/WeFlow`；本地 remote 是 fork，预期差异，不构成缺陷。
 - 已做：`scripts/check-release-config.cjs` 校验 `package.json.repository`、`build.publish.owner/repo`、`main.ts` 内 `repoBase`、README 指向同一仓库；已接入 release CI 的 `release-config-check` job。
-- 剩余：安装旧版做一次真实升级联调。
+- 剩余：真实升级联调受分发形态限制（portable 不支持 electron-updater，上游暂无 release），改为手动替换 exe 验证；启动与手动检查的失败分支均已静默处理。
 
-### R-05 更新包完整性与签名（F-05）· 未执行
+### R-05 更新包完整性与签名（F-05）· 已决策：不做证书（自用/朋友分发）
 
-- 最低要求：构建机配置 Authenticode 证书 + `win.publisherName`，使 `electron-updater` 执行签名校验；无证书时在发布说明中显式标注风险，并在应用内展示更新包哈希与来源 URL。
-- 验收：篡改 `latest.yml` 或替换安装包后，更新被拒绝并记录日志；正常更新可完成。
+- 已做：`app:checkForUpdates` 与 `app:updateAvailable` 载荷附带 `sha512`、下载地址与文件名；更新弹窗展示“未签名，请核对来源与 SHA-512”。
+- 分发形态结论（2026-10-30）：发布产物是 `portable` 单文件 exe，而 `electron-updater@6.8.11` 不含 portable 安装支持（无 `PORTABLE_EXECUTABLE` 处理，安装走 NSIS）；上游 `hicccc77/WeFlow` 目前 0 个 release。因此现有分发形态下自动更新不可用，朋友使用为手动下载替换 exe，签名校验无实际作用。
+- 决策：不购买 Authenticode 证书；保留“未签名 + SHA-512 + 下载来源”提示作为完整性核对手段。若未来改为 NSIS 安装版分发，再配置 `win.publisherName` 并恢复强制签名校验。
 - 参考：`node_modules/electron-updater/out/NsisUpdater.js` 的 `verifySignature` 在 `publisherName == null` 时直接返回。
 
 ### R-06 发布 CI 质量门禁（F-06）· 已完成
@@ -73,12 +68,10 @@
 
 ## P2 — 安全纵深（一个迭代内）
 
-### R-07 恢复渲染进程同源策略 + CSP（F-07）· 缓期
+### R-07 恢复渲染进程同源策略 + CSP（F-07）· 已完成
 
-- 缓期原因：本地媒体（视频/语音/图片）以 `file://` 直接加载，恢复 `webSecurity` 需先完成自定义协议迁移，属独立工作项。
-
-- 动作：本地媒体改用自定义协议（`protocol.handle('weflow-media', ...)` 并做路径包含校验），三个窗口恢复 `webSecurity: true`；`index.html` 或 `session.defaultSession.webRequest.onHeadersReceived` 注入 CSP；补 `setPermissionRequestHandler` 默认拒绝。
-- 验收：视频/图片/语音播放与拖拽导入回归通过；DevTools 中 `fetch('file:///C:/Windows/win.ini')` 被拒；CSP 无 `unsafe-eval`。
+- 实际动作：新增 `electron/mediaProtocol.ts` / `electron/mediaUrl.ts` / `src/utils/mediaUrl.ts`。`weflow-media://` 注册为 standard/secure/CORS/stream 特权 scheme，只放行 userData、temp、`Documents/WeFlow`、配置 `cachePath`/`dbPath` 内的文件，每次请求 realpath（`realpathSync.native`，展开 8.3 短名）归一后做目录包含校验；支持 Range/206、HEAD 与 CORS 预检。主进程媒体 URL 生产点、渲染进程全部 `file://` 消费点迁移到该协议；三个窗口 `webSecurity: true`；`vite.config.ts` 仅在构建期注入 CSP meta（开发模式 HMR 不受影响）；`setPermissionRequestHandler` / `setPermissionCheckHandler` 默认拒绝，仅放行 `clipboard-sanitized-write`。
+- 验收（真实构建 + CDP）：图片、视频经协议加载成功（naturalWidth/视频元数据正常）；Range 请求返回 206 与正确 `Content-Range`；`C:/Windows/win.ini` → 403，缺失文件 → 404；`fetch('file:///C:/Windows/win.ini')` 被 CSP 阻断；权限状态 granted 且用户手势下 `navigator.clipboard.writeText` 成功；首页与侧边栏正常渲染。`npm run typecheck` 0 错误。
 
 ### R-08 收紧 IPC 路径能力（F-08）· 已完成
 
@@ -120,14 +113,14 @@
 | 阶段 | 事项 | 依赖 | 预估 | 状态 |
 | --- | --- | --- | --- | --- |
 | P0 | R-01 → R-02 → R-03 | 无 | 0.5–1 天 | 已完成 2 项，R-02 待决策 |
-| P1 | R-04 → R-05 → R-06 | R-02 决策 | 1–2 天 | R-04/R-06 完成，R-05 未启 |
-| P2 | R-07 → R-08 → R-09 → R-10 | R-06 门禁生效 | 2–3 天 | R-08/R-09 完成，R-07 缓期，R-10 接受 |
+| P1 | R-04 → R-05 → R-06 | R-02 决策 | 1–2 天 | R-04/R-06 完成，R-05 已决策不做（portable 无自动更新） |
+| P2 | R-07 → R-08 → R-09 → R-10 | R-06 门禁生效 | 2–3 天 | R-07/R-08/R-09 完成，R-10 接受 |
 | P3 | R-11 → R-12 → R-13 → R-14 | 无 | 持续 | R-13/R-14 完成，R-11/R-12 未启 |
 
 ## 验收总门禁（发布前）
 
 1. `npm run typecheck` 0 错误；`npm run test:wcdb`、`npm run test:release-notes` 全绿。
-2. 干净 clone + CI 同命令构建成功，产物含 DLL/koffi，且 afterPack 缺失即失败（R-02 决策未落地前不满足）。
-3. 旧版本可检测并完成一次真实更新；篡改更新包被拒绝（或已记录风险并展示哈希）。
-4. 三个窗口 `webSecurity: true` 且 CSP 生效；任意路径写入/打开被拒（路径部分已满足，`webSecurity` 部分未满足）。
+2. 干净 clone + CI 同命令构建成功，产物含 DLL/koffi，且 afterPack 缺失即失败（DLL 已入库，满足）。
+3. 旧版本可检测并完成一次真实更新；签名未配置时弹窗展示来源与 SHA-512（已实现，待真实升级联调）。
+4. 三个窗口 `webSecurity: true` 且 CSP 生效；任意路径写入/打开被拒（已满足：媒体协议 containment 真实构建验证、路径 IPC 已约束）。
 5. 更新源与 `git remote` 一致，或有书面镜像说明（已文档化上游关系并有 CI 检查）。

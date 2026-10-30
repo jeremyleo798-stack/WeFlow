@@ -1,10 +1,10 @@
 ﻿import { join } from 'path'
 import { constants, existsSync, mkdirSync } from 'fs'
 import { access, appendFile, readFile, readdir } from 'fs/promises'
-import { pathToFileURL } from 'url'
 import { app } from 'electron'
 import { ConfigService } from './config'
 import { wcdbService } from './wcdbService'
+import { toMediaUrl } from '../mediaUrl'
 
 export interface VideoInfo {
   videoUrl?: string       // 视频文件路径（用于 readFile）
@@ -314,7 +314,7 @@ class VideoService {
   private async fileToPosterUrl(filePath: string | undefined, mimeType: string, posterFormat: PosterFormat): Promise<string | undefined> {
     try {
       if (!filePath || !(await pathExists(filePath))) return undefined
-      if (posterFormat === 'fileUrl') return pathToFileURL(filePath).toString()
+      if (posterFormat === 'fileUrl') return toMediaUrl(filePath)
       const buffer = await readFile(filePath)
       return `data:${mimeType};base64,${buffer.toString('base64')}`
     } catch {

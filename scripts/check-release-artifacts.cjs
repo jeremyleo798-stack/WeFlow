@@ -1,6 +1,6 @@
 // 发布产物检查：确认解包目录内含 asar、koffi 原生二进制，Windows 还必须有内置 WCDB DLL。
 // 用法：node scripts/check-release-artifacts.cjs [platform] [arch]
-// 默认取当前平台/架构；在 dist 下自动发现含 app.asar 的解包目录。
+// 默认取当前平台/架构；在 package.json build.directories.output（release）下自动发现含 app.asar 的解包目录。
 const fs = require('node:fs')
 const path = require('node:path')
 
@@ -10,10 +10,10 @@ const koffiArch = arch === 'armv7l' ? 'arm' : arch
 const triplet = `${platform}_${koffiArch}`
 const distDir = process.env.RELEASE_DIST_DIR
   ? path.resolve(process.env.RELEASE_DIST_DIR)
-  : path.resolve(__dirname, '..', 'dist')
+  : path.resolve(__dirname, '..', 'release')
 
 if (!fs.existsSync(distDir)) {
-  console.error(`[release-artifacts] dist directory not found: ${distDir}`)
+  console.error(`[release-artifacts] directory not found: ${distDir}`)
   process.exit(1)
 }
 
