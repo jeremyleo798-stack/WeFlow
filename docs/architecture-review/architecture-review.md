@@ -25,7 +25,7 @@
 
 | 层 | 组成 | 规模证据 |
 | --- | --- | --- |
-| 渲染进程 | React 19 + Vite 8，`src/**` | `index.html` 无 CSP |
+| 渲染进程 | React 19 + Vite 8，`src/**` | 构建期注入 CSP meta（`vite.config.ts`） |
 | 预加载桥 | `electron/preload.ts` | 802 行，约 299 处 `ipcRenderer.*` 调用 |
 | 主进程 | `electron/main.ts` + 84 个 service | 5724 行，251 个 `ipcMain.handle` |
 | 原生数据库 | `wcdbService`（worker_threads）→ `wcdbCore`（koffi）→ `wcdb_api.dll` | `wcdbService.ts` 914 行，`wcdbCore.ts` 5311 行 |
@@ -112,7 +112,7 @@
 - 证据（修复前）：`electron/main.ts` 主窗口、视频窗口、图片查看器均 `webSecurity: false`；`index.html` 无 CSP meta；无 `onHeadersReceived` CSP 注入、无 `setPermissionRequestHandler`。
 - 影响：关闭同源策略后，渲染进程中的任何注入点（见 F-09）都能读取任意 `file://` 内容并发起跨域请求；配合 F-08 的任意路径写入，可升级为本地文件窃取/覆盖。
 - 建议：用自定义协议（`protocol.handle`）服务本地媒体，恢复 `webSecurity: true`；加 CSP（至少 `default-src 'self'`、限制 `img-src`/`media-src` 到自定义协议）；补权限处理器。
-- 现状：已执行。新增 `electron/mediaProtocol.ts` / `electron/mediaUrl.ts`：`weflow-media://` 注册为 standard/secure/CORS 特权 scheme，只放行 userData、temp、`Documents/WeFlow`、配置的 `cachePath`/`dbPath` 内的文件（每次请求 realpath 归一后做目录包含校验，拒绝时 403）；支持 Range/206 与 HEAD。主进程所有媒体 URL 生产点与渲染进程所有 `file://` 消费点均改走该协议（`src/utils/mediaUrl.ts` 统一转换）。三个窗口 `webSecurity: true`；`vite.config.ts` 在构建时注入 CSP（`script-src 'self'`、`connect-src` 不含 `file:`、`img-src`/`media-src` 含 `weflow-media:`）；主会话默认拒绝权限申请，仅放行 `clipboard-sanitized-write`。
+- 现状：已执行。新增 `electron/mediaProtocol.ts` / `electron/mediaUrl.ts`：`weflow-media://` 注册为 standard/secure/CORS 特权 scheme，只放行 userData、temp、`Documents/WeFlow`、配置的 `cachePath`/`dbPath` 内的文件（每次请求 realpath 归一后做目录包含校验，拒绝时 403）；支持 Range/206 与 HEAD。主进程所有媒体 URL 生产点与渲染进程所有 `file://` 消费点均改走该协议（`src/utils/mediaUrl.ts` 统一转换）。三个窗口 `webSecurity: true`；`vite.config.ts` 在构建时注入 CSP（`script-src 'self' 'wasm-unsafe-eval'`（Shiki 高亮引擎需要 WebAssembly）、`connect-src` 不含 `file:`、`img-src`/`media-src` 含 `weflow-media:`）；主会话默认拒绝权限申请，仅放行 `clipboard-sanitized-write`。
 
 ### F-08 渲染进程可达的任意路径写入/打开
 
@@ -234,12 +234,12 @@ WeFlow 是本地优先的微信数据归档与分析桌面应用，涉及聊天�
 | F-05 | 检查更新载荷增加 `sha512`/下载地址；更新弹窗展示未签名提示与校验信息 | 组件级渲染测试通过（含注入防护）；未在真实更新流程中验证 |
 | F-14 | 新增 `AGENTS.md`（本地生效；仓库 `.gitignore:69` 显式忽略该文件，是否入库需维护者决定） | — |
 | F-15 | 风险接受，保留文档化 `0.0.0.0` 选项与 query token | 代码核对 |
-| F-07 (R-07) | 新增 `electron/mediaProtocol.ts`、`electron/mediaUrl.ts`、`src/utils/mediaUrl.ts`；主/渲染进程媒体 URL 全量迁移到 `weflow-media://`；三窗口 `webSecurity: true`；构建期注入 CSP；权限处理器默认拒绝 | 真实构建内 CDP 验证：图片/视频经协议加载（1×1、160×120）、Range 返回 206、越权路径 403、缺失文件 404、`fetch('file://…')` 被 CSP 阻断、剪贴板在用户手势下可写、首页/侧边栏正常渲染；`npm run typecheck` 通过 |
+| F-07 (R-07) | 新增 `electron/mediaProtocol.ts`、`electron/mediaUrl.ts`、`src/utils/mediaUrl.ts`；主/渲染进程媒体 URL 全量迁移到 `weflow-media://`；三窗口 `webSecurity: true`；构建期注入 CSP（`script-src` 含 `'wasm-unsafe-eval'` 供 Shiki 高亮引擎使用）；权限处理器默认拒绝 | 真实构建内 CDP 验证：图片/视频经协议加载（1×1、160×120）、Range 返回 206、越权路径 403、缺失文件 404、`fetch('file://…')` 被 CSP 阻断、剪贴板在用户手势下可写、首页/侧边栏正常渲染、打包版内 Shiki wasm 可编译；`npm run typecheck` 通过 |
 
-验证汇总：`npm run typecheck` 0 错误；`test:wcdb` 46/46；agent sampling 7/7；`test:release-notes` 通过（含 UpdateDialog 的未签名提示与 SHA-512 渲染断言）；release-config 通过；release-artifacts 对 `release/win-unpacked` 通过；`npx vite build` 通过（含新 `releaseNotes.tsx` 与弹窗样式）。R-07：真实构建内 CDP 验证协议与 CSP 行为（见上表 F-07 行）；`npm run typecheck` 通过。
+验证汇总：`npm run typecheck` 0 错误；`test:wcdb` 46/46；agent sampling 7/7；`test:release-notes` 通过（含 UpdateDialog 的未签名提示与 SHA-512 渲染断言）；release-config 通过；release-artifacts 对 `release/win-unpacked` 通过；`npx vite build` 通过（含新 `releaseNotes.tsx` 与弹窗样式）。R-07：真实构建内 CDP 验证协议与 CSP 行为（见上表 F-07 行），打包版内 Shiki wasm 在加入 `'wasm-unsafe-eval'` 后可编译；`npm run typecheck` 通过。
 
 尚未执行：应用内更新弹窗真实渲染验证（仅组件级渲染检查；且 portable 分发不支持自动更新，真实升级链路不可用）、`risk-map.dot` 的 Graphviz 渲染（本机未安装 graphviz，仅做结构校验）；R-07 的真实微信数据链路（聊天图片解密 → 协议加载、图片查看器/视频窗口、朋友圈视频封面的 crossOrigin 抽帧）因本机无已配置的微信数据，仅验证了协议层与渲染层机制，未跑真实会话数据。
 
-已补执行（2026-10-30）：完整 `build:portable` 打包成功（`release/WeFlow.exe`，185,417,021 bytes），`check-release-artifacts.cjs` 对 `release/win-unpacked` 通过（DLL 12,839,447 bytes、koffi 1,051,648 bytes）；解包版与便携 exe 均真实启动并截图确认渲染，打包版内 CSP、`weflow-media` 加载、403 containment、`fetch('file://…')` 阻断均复验通过。
+已补执行（2026-10-30）：完整打包成功（`release/WeFlow.exe`，185,397,189 bytes；因 `release/win-unpacked` 被上次运行占用，electron-builder 输出到 `release-tmp` 后同步回 `release/`，内容一致），`check-release-artifacts.cjs` 对 `release/win-unpacked` 通过（DLL 12,839,447 bytes、koffi 1,051,648 bytes）；解包版与便携 exe 均真实启动并截图确认渲染，打包版内 CSP、`weflow-media` 加载、403 containment、`fetch('file://…')` 阻断均复验通过。整体审查另发现：初版 CSP `script-src 'self'` 会拒绝 Shiki 的 `WebAssembly.instantiate`（AI 代码块高亮失效，已在旧打包版中复现），已加入 `'wasm-unsafe-eval'` 并重新打包，CDP 验证 Shiki wasm 可编译。
 
 配套文件：`risk-map.dot`（风险关系图）、`remediation-plan.md`（修复排期与验收）、`quality-scenarios.md`（质量场景）。

@@ -142,7 +142,9 @@ const copyJiebaNodeWasmPlugin = () => ({
 // 生产构建注入 CSP。dev 环境的 Vite HMR 需要内联脚本与 ws 连接，无法套用同一策略。
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
-  "script-src 'self'",
+  // Shiki 语法高亮默认引擎用 WebAssembly（wasm-inlined），Chromium 需要 'wasm-unsafe-eval' 才允许实例化；
+  // 该项只放开 wasm 编译，不放宽 JS eval。
+  "script-src 'self' 'wasm-unsafe-eval'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https: http: file: weflow-media:",
   "media-src 'self' data: blob: https: http: file: weflow-media:",

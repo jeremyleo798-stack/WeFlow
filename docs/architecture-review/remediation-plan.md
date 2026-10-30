@@ -70,8 +70,8 @@
 
 ### R-07 恢复渲染进程同源策略 + CSP（F-07）· 已完成
 
-- 实际动作：新增 `electron/mediaProtocol.ts` / `electron/mediaUrl.ts` / `src/utils/mediaUrl.ts`。`weflow-media://` 注册为 standard/secure/CORS/stream 特权 scheme，只放行 userData、temp、`Documents/WeFlow`、配置 `cachePath`/`dbPath` 内的文件，每次请求 realpath（`realpathSync.native`，展开 8.3 短名）归一后做目录包含校验；支持 Range/206、HEAD 与 CORS 预检。主进程媒体 URL 生产点、渲染进程全部 `file://` 消费点迁移到该协议；三个窗口 `webSecurity: true`；`vite.config.ts` 仅在构建期注入 CSP meta（开发模式 HMR 不受影响）；`setPermissionRequestHandler` / `setPermissionCheckHandler` 默认拒绝，仅放行 `clipboard-sanitized-write`。
-- 验收（真实构建 + CDP）：图片、视频经协议加载成功（naturalWidth/视频元数据正常）；Range 请求返回 206 与正确 `Content-Range`；`C:/Windows/win.ini` → 403，缺失文件 → 404；`fetch('file:///C:/Windows/win.ini')` 被 CSP 阻断；权限状态 granted 且用户手势下 `navigator.clipboard.writeText` 成功；首页与侧边栏正常渲染。`npm run typecheck` 0 错误。
+- 实际动作：新增 `electron/mediaProtocol.ts` / `electron/mediaUrl.ts` / `src/utils/mediaUrl.ts`。`weflow-media://` 注册为 standard/secure/CORS/stream 特权 scheme，只放行 userData、temp、`Documents/WeFlow`、配置 `cachePath`/`dbPath` 内的文件，每次请求 realpath（`realpathSync.native`，展开 8.3 短名）归一后做目录包含校验；支持 Range/206、HEAD 与 CORS 预检。主进程媒体 URL 生产点、渲染进程全部 `file://` 消费点迁移到该协议；三个窗口 `webSecurity: true`；`vite.config.ts` 仅在构建期注入 CSP meta（开发模式 HMR 不受影响），其中 `script-src` 为 `'self' 'wasm-unsafe-eval'`：Shiki 代码高亮引擎经 WebAssembly 实例化，缺少该项时打包版会拒绝 `WebAssembly.instantiate`（2026-10-30 整体审查在真实打包版中复现并修复）；`setPermissionRequestHandler` / `setPermissionCheckHandler` 默认拒绝，仅放行 `clipboard-sanitized-write`。
+- 验收（真实构建 + CDP）：图片、视频经协议加载成功（naturalWidth/视频元数据正常）；Range 请求返回 206 与正确 `Content-Range`；`C:/Windows/win.ini` → 403，缺失文件 → 404；`fetch('file:///C:/Windows/win.ini')` 被 CSP 阻断；权限状态 granted 且用户手势下 `navigator.clipboard.writeText` 成功；首页与侧边栏正常渲染；Shiki 的 wasm chunk 在打包版内可编译（`WebAssembly.compile`）。`npm run typecheck` 0 错误。
 
 ### R-08 收紧 IPC 路径能力（F-08）· 已完成
 
