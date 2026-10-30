@@ -31,7 +31,7 @@ function extractFunction(source, name) {
 
 function stripTypes(source) {
   return source
-    .replace(/\bexport type [A-Za-z0-9_]+ = \{[\s\S]*?\n\}\n/, '')
+    .replace(/\bexport type [A-Za-z0-9_]+ = \{[\s\S]*?\r?\n\}\r?\n/, '')
     .replace(/\bexport /g, '')
     .replace(/: Agent(?:Sampling|Model)Config/g, '')
     .replace(/: \{ protocol\?: string; model\?: string \}/g, '')

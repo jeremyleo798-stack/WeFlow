@@ -396,7 +396,8 @@ export class WcdbCore {
 
 
   /**
-   * WCDB 原生库路径：完全由外部用户配置提供（第三方可插拔实现），不再内置查找/校验来源。
+   * WCDB 原生库路径：优先使用用户配置（第三方可插拔实现），
+   * 未配置时回退到安装包内置的 native/wcdb-native/dist/wcdb_api.dll。
    */
   private libPath: string | null = null
 
@@ -405,9 +406,18 @@ export class WcdbCore {
   }
 
   private getDllPath(): string {
-    const envDllPath = process.env.WCDB_DLL_PATH
     if (this.libPath) return this.libPath
+    const envDllPath = process.env.WCDB_DLL_PATH
     if (envDllPath && envDllPath.length > 0) return envDllPath
+    if (process.platform !== 'win32') return ''
+    const bundledCandidates = [
+      this.resourcesPath ? join(this.resourcesPath, 'native', 'wcdb-native', 'dist', 'wcdb_api.dll') : '',
+      process.resourcesPath ? join(process.resourcesPath, 'resources', 'native', 'wcdb-native', 'dist', 'wcdb_api.dll') : '',
+      process.resourcesPath ? join(process.resourcesPath, 'native', 'wcdb-native', 'dist', 'wcdb_api.dll') : ''
+    ]
+    for (const candidate of bundledCandidates) {
+      if (candidate && existsSync(candidate)) return candidate
+    }
     return ''
   }
 
