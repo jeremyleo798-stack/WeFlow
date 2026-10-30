@@ -407,8 +407,8 @@ export class WcdbCore {
 
   private getDllPath(): string {
     if (this.libPath) return this.libPath
-    const envDllPath = process.env.WCDB_DLL_PATH
-    if (envDllPath && envDllPath.length > 0) return envDllPath
+    const envDllPath = process.env.WCDB_DLL_PATH?.trim()
+    if (envDllPath && existsSync(envDllPath)) return envDllPath
     if (process.platform !== 'win32') return ''
     const bundledCandidates = [
       this.resourcesPath ? join(this.resourcesPath, 'native', 'wcdb-native', 'dist', 'wcdb_api.dll') : '',

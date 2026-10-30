@@ -1,0 +1,200 @@
+// WeFlow 架构风险关系图（2026-10-30）
+// 证据基线：main e66f89c + 工作区未提交改动；详见 architecture-review.md
+// 渲染：dot -Tsvg docs/architecture-review/risk-map.dot -o risk-map.svg
+digraph WeFlowRiskMap {
+  graph [
+    rankdir=TB,
+    fontname="Helvetica",
+    fontsize=10,
+    nodesep=0.30,
+    ranksep=0.55,
+    compound=true,
+    newrank=true,
+    labelloc="t",
+    label="WeFlow 风险关系图：发布链路 / 更新供应链 / 安全边界 / 工程可持续性",
+    fontsize=14
+  ]
+  node [
+    shape=box,
+    style="rounded,filled",
+    fontname="Helvetica",
+    fontsize=9,
+    margin="0.10,0.05",
+    color="#78909C",
+    fillcolor="#ECEFF1"
+  ]
+  edge [
+    fontname="Helvetica",
+    fontsize=8,
+    color="#607D8B",
+    arrowsize=0.7
+  ]
+
+  // ---------- 质量属性 ----------
+  subgraph cluster_quality {
+    label="质量属性";
+    style="rounded,dashed";
+    color="#90A4AE";
+    fontcolor="#455A64";
+    q_release [label="可重复发布", shape=ellipse, fillcolor="#E8F5E9", color="#2E7D32"];
+    q_supply  [label="供应链完整性", shape=ellipse, fillcolor="#E8F5E9", color="#2E7D32"];
+    q_security[label="运行安全边界", shape=ellipse, fillcolor="#E8F5E9", color="#2E7D32"];
+    q_maint   [label="可维护性", shape=ellipse, fillcolor="#E8F5E9", color="#2E7D32"];
+    q_test    [label="可测试性", shape=ellipse, fillcolor="#E8F5E9", color="#2E7D32"];
+  }
+
+  // ---------- 发布与打包 ----------
+  subgraph cluster_release {
+    label="发布与打包链路";
+    style="rounded";
+    color="#B71C1C";
+    fontcolor="#B71C1C";
+
+    a_pkg    [label="package.json\nbuild.afterPack (L115)", shape=note];
+    a_after  [label="scripts/after-pack.cjs\ncopyKoffi / copyWcdb"];
+    a_dll    [label="wcdb_api.dll\n12.8 MB · gitignored (.gitignore:12)", shape=cylinder, fillcolor="#FFF8E1"];
+    a_core   [label="wcdbCore.getDllPath()\nDLL 候选解析", fillcolor="#E3F2FD"];
+    a_ci     [label="release.yml\nnpm install → npx tsc → vite → builder"];
+    a_lock   [label="package-lock / pnpm-lock\n双包管理器", shape=note];
+    a_ws     [label="pnpm-workspace.yaml\nallowBuilds (gitignored)", shape=note];
+
+    r_f01 [label="F-01 Critical\n[已修复] afterPack 路径\n(假 context 验证通过)", fillcolor="#E8F5E9", color="#2E7D32"];
+    r_f02 [label="F-02 High\n[已加固] CI 缺失即失败\nDLL 分发方式待决策", fillcolor="#FFF8E1", color="#E65100", penwidth=2];
+    r_f03 [label="F-03 Medium\n[已修复] WCDB_DLL_PATH\n校验存在性", fillcolor="#E8F5E9", color="#2E7D32"];
+    r_f06 [label="F-06 Medium\n[已修复] CI 跑 typecheck\n+ wcdb/render 测试", fillcolor="#E8F5E9", color="#2E7D32"];
+    r_f10 [label="F-10 Medium\n锁文件与 overrides 分叉", fillcolor="#FFFDE7", color="#F9A825"];
+    r_f11 [label="F-11 Medium\n新环境装不出 Electron", fillcolor="#FFFDE7", color="#F9A825"];
+  }
+
+  // ---------- 更新供应链 ----------
+  subgraph cluster_update {
+    label="更新供应链";
+    style="rounded";
+    color="#E65100";
+    fontcolor="#E65100";
+
+    u_feed    [label="main.ts:493-522\ngeneric feed → hicccc77/WeFlow", shape=note, fillcolor="#E3F2FD"];
+    u_publish [label="build.publish.owner\n= hicccc77", shape=note];
+    u_remote  [label="git remote\n= jeremyleo798-stack/WeFlow", shape=note];
+    u_signer  [label="electron-updater\nverifySignature", fillcolor="#E3F2FD"];
+    u_dialog  [label="UpdateDialog.tsx:102\ndangerouslySetInnerHTML", fillcolor="#E3F2FD"];
+
+    r_f04 [label="F-04 已澄清\n上游仓库 = hicccc77/WeFlow\n(本地 remote 是 fork)\n已加一致性检查", fillcolor="#E8F5E9", color="#2E7D32"];
+    r_f05 [label="F-05 High\n无签名 + 更新签名校验跳过\n(待证书)", fillcolor="#FFF3E0", color="#E65100", penwidth=2];
+    r_f09 [label="F-09 Medium\n[已修复] Release 正文\n改为 React 节点渲染", fillcolor="#E8F5E9", color="#2E7D32"];
+  }
+
+  // ---------- 安全边界 ----------
+  subgraph cluster_security {
+    label="安全边界";
+    style="rounded";
+    color="#AD1457";
+    fontcolor="#AD1457";
+
+    s_win    [label="BrowserWindow ×3\nwebSecurity:false (L1129/1555/1614)", fillcolor="#E3F2FD"];
+    s_csp    [label="index.html\n无 CSP / 无权限处理器", fillcolor="#E3F2FD"];
+    s_ipc    [label="preload.ts\n251 IPC 通道 / 299 调用点", fillcolor="#E3F2FD"];
+    s_write  [label="file:writeBase64 (L2950)\nshell:openPath (L3061)", fillcolor="#E3F2FD"];
+    s_http   [label="httpService\ntoken + timingSafeEqual + localhost CORS", fillcolor="#E8F5E9"];
+
+    r_f07 [label="F-07 High\nwebSecurity 全关 + 无 CSP\n(待媒体协议迁移)", fillcolor="#FFF3E0", color="#E65100", penwidth=2];
+    r_f08 [label="F-08 High\n[已修复] 删除 writeBase64\nopenPath 加目录约束", fillcolor="#E8F5E9", color="#2E7D32"];
+    r_f15 [label="F-15 Low\n[风险接受] 非回环为\n文档化选项 + 强制 token", fillcolor="#ECEFF1", color="#546E7A"];
+  }
+
+  // ---------- 工程可持续性 ----------
+  subgraph cluster_eng {
+    label="工程可持续性";
+    style="rounded";
+    color="#455A64";
+    fontcolor="#455A64";
+
+    e_main  [label="electron/main.ts\n5724 行 · 251 handlers", shape=note];
+    e_svc   [label="electron/services/\n84 个服务", shape=note];
+    e_test  [label="2 个 node:test 脚本\n(46 + 7 断言)", shape=note];
+    e_agent [label="无 AGENTS.md / CLAUDE.md", shape=note];
+
+    r_f12 [label="F-12 Medium\n单体主进程 + IPC 无契约", fillcolor="#FFFDE7", color="#F9A825"];
+    r_f13 [label="F-13 Medium\n[部分修复] 新增 config/\nartifacts/render 检查", fillcolor="#F1F8E9", color="#7CB342"];
+    r_f14 [label="F-14 Low\n[已修复] 新增 AGENTS.md", fillcolor="#E8F5E9", color="#2E7D32"];
+  }
+
+  // ---------- 风险 → 架构元素 ----------
+  r_f01 -> a_pkg   [label="曾引用已删除文件", color="#2E7D32", penwidth=1.6];
+  r_f01 -> a_ci    [label="曾阻断发布构建", color="#2E7D32", penwidth=1.6];
+  r_f02 -> a_dll   [label="未入库"];
+  r_f02 -> a_after [label="CI 缺失即失败"];
+  r_f02 -> a_core  [label="回退候选落空"];
+  r_f03 -> a_core  [label="失效 env 短路"];
+  r_f06 -> a_ci    [label="已接入 node 类型检查"];
+  r_f10 -> a_lock  [label="双锁分叉"];
+  r_f11 -> a_ws    [label="构建白名单未入库"];
+
+  r_f04 -> u_feed    [label="上游仓库（已校验）"];
+  r_f04 -> u_publish [label="owner 一致"];
+  r_f04 -> u_remote  [label="fork remote，预期差异"];
+  r_f05 -> u_signer  [label="publisherName 缺失"];
+  r_f05 -> u_feed    [label="仅 HTTPS 信任"];
+  r_f09 -> u_dialog  [label="已移除 innerHTML"];
+
+  r_f07 -> s_win   [label="关闭同源策略"];
+  r_f07 -> s_csp   [label="无纵深"];
+  r_f08 -> s_write [label="目录约束生效"];
+  r_f08 -> s_ipc   [label="通道可达"];
+  r_f15 -> s_http  [label="绑定可控"];
+  r_f09 -> s_win   [label="注入面（已修）"];
+  s_win  -> s_ipc  [label="页面可调用", style=dashed];
+
+  r_f12 -> e_main [label="体积/耦合"];
+  r_f12 -> e_svc  [label="边界模糊"];
+  r_f13 -> e_test [label="覆盖不足"];
+  r_f14 -> e_agent[label="指引缺失"];
+
+  // ---------- 风险 → 质量属性 ----------
+  r_f01 -> q_release [style=dashed, color="#B71C1C"];
+  r_f02 -> q_release [style=dashed];
+  r_f10 -> q_release [style=dashed];
+  r_f11 -> q_release [style=dashed];
+  r_f04 -> q_supply  [style=dashed];
+  r_f05 -> q_supply  [style=dashed];
+  r_f09 -> q_security[style=dashed];
+  r_f07 -> q_security[style=dashed, color="#AD1457"];
+  r_f08 -> q_security[style=dashed, color="#AD1457"];
+  r_f15 -> q_security[style=dashed];
+  r_f12 -> q_maint   [style=dashed];
+  r_f14 -> q_maint   [style=dashed];
+  r_f06 -> q_test    [style=dashed];
+  r_f13 -> q_test    [style=dashed];
+
+  // ---------- 交叉放大 ----------
+  r_f07 -> r_f08 [label="放大", color="#AD1457", style=dotted, constraint=false];
+  r_f08 -> r_f09 [label="放大", color="#AD1457", style=dotted, constraint=false];
+  r_f02 -> r_f01 [label="同属发布关键路径", style=dotted, constraint=false];
+  r_f10 -> r_f11 [label="同源：环境不可复现", style=dotted, constraint=false];
+
+  // ---------- 正向控制 ----------
+  subgraph cluster_positive {
+    label="已确认的正向控制";
+    style="rounded,dashed";
+    color="#2E7D32";
+    fontcolor="#2E7D32";
+    p_fuse  [label="Electron fuses ×4\n(no inspect / NODE_OPTIONS / asar 完整性)", fillcolor="#E8F5E9", color="#2E7D32"];
+    p_iso   [label="contextIsolation:true\nnodeIntegration:false", fillcolor="#E8F5E9", color="#2E7D32"];
+    p_nav   [label="导航/新窗口协议白名单", fillcolor="#E8F5E9", color="#2E7D32"];
+    p_http  [label="HTTP API 默认本机 + token", fillcolor="#E8F5E9", color="#2E7D32"];
+    p_trace [label="traceKeyFlow 不落密钥", fillcolor="#E8F5E9", color="#2E7D32"];
+  }
+  p_fuse  -> s_win [style=dashed, color="#2E7D32", label="部分抵消"];
+  p_iso   -> s_win [style=dashed, color="#2E7D32"];
+  p_nav   -> s_win [style=dashed, color="#2E7D32"];
+  p_http  -> s_http[style=dashed, color="#2E7D32"];
+  p_trace -> q_security [style=dashed, color="#2E7D32", label="隐私正向"];
+
+  // ---------- 待决策 ----------
+  d_dll [label="待决策 D-01\nDLL：入库 / Release asset / CI 编译 / 显式外部依赖", shape=hexagon, fillcolor="#FFF9C4", color="#F57F17"];
+  d_repo[label="已澄清 D-02\n发布源 = hicccc77/WeFlow（上游）", shape=hexagon, fillcolor="#E8F5E9", color="#2E7D32"];
+  d_sign[label="待决策 D-03\n是否引入 Authenticode 签名", shape=hexagon, fillcolor="#FFF9C4", color="#F57F17"];
+  d_dll  -> r_f02 [style=dashed];
+  d_repo -> r_f04 [style=dashed];
+  d_sign -> r_f05 [style=dashed];
+}

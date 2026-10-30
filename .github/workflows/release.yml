@@ -13,8 +13,24 @@ env:
   ELECTRON_BUILDER_BINARIES_MIRROR: https://github.com/electron-userland/electron-builder-binaries/releases/download/
 
 jobs:
+  release-config-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out git repository
+        uses: actions/checkout@v5
+
+      - name: Install Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - name: Check release target consistency
+        run: node scripts/check-release-config.cjs
+
   prepare-release:
     runs-on: ubuntu-latest
+    needs: release-config-check
 
     steps:
       - name: Prepare GitHub release
@@ -56,10 +72,12 @@ jobs:
           echo "Syncing package.json version to $VERSION"
           node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));p.version='$VERSION';fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')"
 
-      - name: Build Frontend & Type Check
+      - name: Type Check, Test & Build Frontend
         shell: bash
         run: |
-          npx tsc
+          npm run typecheck
+          npm run test:wcdb
+          npm run test:release-notes
           npx vite build
 
       - name: Package and Publish macOS arm64 (unsigned DMG + ZIP)
@@ -75,6 +93,10 @@ jobs:
             echo "::warning::DMG packaging failed (hdiutil instability on runner). Retrying with ZIP only."
             npx electron-builder --mac zip --arm64 --publish never '--config.npmRebuild=false'
           fi
+
+      - name: Verify packaged artifacts
+        shell: bash
+        run: node scripts/check-release-artifacts.cjs darwin arm64
 
       - name: Inject minimumVersion into latest yml
         env:
@@ -115,10 +137,12 @@ jobs:
           echo "Syncing package.json version to $VERSION"
           node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));p.version='$VERSION';fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')"
 
-      - name: Build Frontend & Type Check
+      - name: Type Check, Test & Build Frontend
         shell: bash
         run: |
-          npx tsc
+          npm run typecheck
+          npm run test:wcdb
+          npm run test:release-notes
           npx vite build
 
       - name: Package and Publish Linux
@@ -126,6 +150,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npx electron-builder --linux --publish never
+
+      - name: Verify packaged artifacts
+        shell: bash
+        run: node scripts/check-release-artifacts.cjs linux x64
 
       - name: Inject minimumVersion into latest yml
         env:
@@ -166,10 +194,12 @@ jobs:
           echo "Syncing package.json version to $VERSION"
           node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));p.version='$VERSION';fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')"
 
-      - name: Build Frontend & Type Check
+      - name: Type Check, Test & Build Frontend
         shell: bash
         run: |
-          npx tsc
+          npm run typecheck
+          npm run test:wcdb
+          npm run test:release-notes
           npx vite build
 
       - name: Package and Publish
@@ -177,6 +207,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npx electron-builder --win nsis --x64 --publish never '--config.artifactName=${productName}-${version}-x64-Setup.${ext}'
+
+      - name: Verify packaged artifacts
+        shell: bash
+        run: node scripts/check-release-artifacts.cjs win32 x64
 
       - name: Inject minimumVersion into latest yml
         env:
@@ -217,10 +251,12 @@ jobs:
           echo "Syncing package.json version to $VERSION"
           node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));p.version='$VERSION';fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')"
 
-      - name: Build Frontend & Type Check
+      - name: Type Check, Test & Build Frontend
         shell: bash
         run: |
-          npx tsc
+          npm run typecheck
+          npm run test:wcdb
+          npm run test:release-notes
           npx vite build
 
       - name: Package and Publish Windows arm64
@@ -228,6 +264,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npx electron-builder --win nsis --arm64 --publish never '--config.publish.channel=latest-arm64' '--config.artifactName=${productName}-${version}-arm64-Setup.${ext}'
+
+      - name: Verify packaged artifacts
+        shell: bash
+        run: node scripts/check-release-artifacts.cjs win32 arm64
 
       - name: Inject minimumVersion into latest yml
         env:

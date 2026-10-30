@@ -2022,7 +2022,6 @@ export interface ElectronAPI {
     onChunk: (runId: string, callback: (chunk: unknown) => void) => () => void
     onProgress: (runId: string, callback: (progress: unknown) => void) => () => void
   }
-  file: { writeBase64: (filePath: string, base64: string) => Promise<{ success: boolean; error?: string }> }
   tts: { speak: (text: string, options?: TtsSpeakOptions) => Promise<any>; stream?: (streamId: string, text: string, options: TtsSpeakOptions | undefined, callback: (event: TtsStreamEvent) => void) => Promise<any>; cancelStream?: (streamId: string) => Promise<{ success: boolean }> }
   groupSummary: {
     listRecords: (filters?: GroupSummaryRecordFilters) => Promise<GroupSummaryRecordListResult>

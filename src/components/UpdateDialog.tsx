@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Quote, X } from 'lucide-react'
 import LiquidGlass from './LiquidGlass'
+import { renderReleaseNotes } from './releaseNotes'
 import './UpdateDialog.scss'
 
 interface UpdateInfo {
@@ -99,7 +100,7 @@ const UpdateDialog: React.FC<UpdateDialogProps> = ({
                         </div>
                         <div className="text-box">
                             {updateInfo.releaseNotes ? (
-                                <div dangerouslySetInnerHTML={{ __html: updateInfo.releaseNotes }} />
+                                <div>{renderReleaseNotes(updateInfo.releaseNotes)}</div>
                             ) : (
                                 <p>修复了一些已知问题，提升了稳定性。</p>
                             )}

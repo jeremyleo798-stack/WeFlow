@@ -3,11 +3,11 @@ import { app, BrowserWindow, ipcMain, nativeTheme, Tray, Menu, nativeImage, shel
 import { Worker } from 'worker_threads'
 import { fork, type ChildProcess, type ForkOptions } from 'child_process'
 import { createHash, randomUUID } from 'crypto'
-import { join, dirname } from 'path'
+import { join, dirname, resolve, relative, isAbsolute } from 'path'
 import { pathToFileURL } from 'url'
 import { autoUpdater } from 'electron-updater'
 import { readFile, writeFile, mkdir, rm, readdir, copyFile } from 'fs/promises'
-import { appendFileSync, existsSync, mkdirSync } from 'fs'
+import { appendFileSync, existsSync, mkdirSync, realpathSync } from 'fs'
 import { ConfigService } from './services/config'
 import { wcdbService } from './services/wcdbService'
 import { chatService } from './services/chatService'
@@ -94,6 +94,40 @@ const defaultUpdateTrack: 'stable' | 'preview' | 'dev' = (() => {
   return 'stable'
 })()
 let configService: ConfigService | null = null
+const approvedOpenRoots = new Set<string>()
+
+const canonicalPath = (target: string): string => {
+  const absolute = resolve(target)
+  let real = absolute
+  try {
+    real = realpathSync.native(absolute)
+  } catch {
+    // 路径可能尚未创建，退回 resolve 结果
+  }
+  return process.platform === 'win32' ? real.toLowerCase() : real
+}
+
+const isPathWithin = (target: string, root: string): boolean => {
+  const rel = relative(canonicalPath(root), canonicalPath(target))
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
+}
+
+const approveOpenRoot = (target: string | undefined | null): void => {
+  if (target && String(target).trim()) approvedOpenRoots.add(canonicalPath(target))
+}
+
+const isOpenPathAllowed = (target: string): boolean => {
+  const roots = [
+    app.getPath('userData'),
+    app.getPath('downloads'),
+    join(app.getPath('documents'), 'WeFlow'),
+    String(configService?.get('exportPath') || '').trim()
+  ].filter(Boolean)
+  for (const root of [...roots, ...approvedOpenRoots]) {
+    if (isPathWithin(target, root)) return true
+  }
+  return false
+}
 const activeExportWorkers = new Map<string, Worker>()
 const activeExportTasks = new Set<string>()
 let databaseRestoreDepth = 0
@@ -2947,15 +2981,6 @@ function registerIpcHandlers() {
     }
   })
 
-  ipcMain.handle('file:writeBase64', async (_, filePath: string, base64: string) => {
-    try {
-      await writeFile(filePath, Buffer.from(String(base64 || ''), 'base64'))
-      return { success: true }
-    } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : String(error) }
-    }
-  })
-
   ipcMain.handle('groupSummary:listRecords', async (_, filters?: {
     sessionId?: string
     startTime?: number
@@ -3047,19 +3072,26 @@ function registerIpcHandlers() {
 
   ipcMain.handle('dialog:openDirectory', async (_, options) => {
     const { dialog } = await import('electron')
-    return dialog.showOpenDialog({
+    const result = await dialog.showOpenDialog({
       properties: ['openDirectory', 'createDirectory'],
       ...options
     })
+    for (const selected of result.filePaths || []) approveOpenRoot(selected)
+    return result
   })
 
   ipcMain.handle('dialog:saveFile', async (_, options) => {
     const { dialog } = await import('electron')
-    return dialog.showSaveDialog(options)
+    const result = await dialog.showSaveDialog(options)
+    if (!result.canceled && result.filePath) approveOpenRoot(dirname(result.filePath))
+    return result
   })
 
   ipcMain.handle('shell:openPath', async (_, path: string) => {
     const { shell } = await import('electron')
+    if (typeof path !== 'string' || !isOpenPathAllowed(path)) {
+      return '不允许打开该路径'
+    }
     return shell.openPath(path)
   })
 
@@ -4109,6 +4141,7 @@ function registerIpcHandlers() {
     if (result.canceled || !result.filePaths?.[0]) {
       return { canceled: true }
     }
+    approveOpenRoot(result.filePaths[0])
     return { canceled: false, filePath: result.filePaths[0] }
   })
 

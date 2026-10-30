@@ -774,7 +774,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
   },
 
-  file: { writeBase64: (filePath: string, base64: string) => ipcRenderer.invoke('file:writeBase64', filePath, base64) },
   tts: { speak: async () => ({ success: false, error: '未配置语音服务' }) },
 
   groupSummary: {

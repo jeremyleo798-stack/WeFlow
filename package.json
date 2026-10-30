@@ -17,11 +17,12 @@
     "rebuild": "electron-rebuild",
     "dev": "node scripts/prepare-electron-runtime.cjs && vite",
     "test:wcdb": "node --test scripts/check-wcdb-optional-exports.cjs",
+    "test:release-notes": "node scripts/check-release-notes-render.cjs",
     "typecheck:renderer": "tsc --noEmit -p tsconfig.json",
     "typecheck:electron": "tsc --noEmit -p tsconfig.node.json",
     "typecheck": "npm run typecheck:renderer && npm run typecheck:electron",
     "build": "npm run typecheck && node scripts/clean-dist-electron.cjs && vite build && electron-builder",
-    "build:portable": "npm run typecheck:renderer && node scripts/clean-dist-electron.cjs && vite build && electron-builder --win portable --x64 --config.electronDist=node_modules/electron/dist",
+    "build:portable": "npm run typecheck && node scripts/clean-dist-electron.cjs && vite build && electron-builder --win portable --x64 --config.electronDist=node_modules/electron/dist",
     "preview": "vite preview",
     "electron:dev": "node scripts/prepare-electron-runtime.cjs && vite --mode electron",
     "electron:build": "npm run build"
@@ -112,7 +113,7 @@
   "build": {
     "appId": "com.WeFlow.app",
     "asar": true,
-    "afterPack": "scripts/after-pack-koffi.cjs",
+    "afterPack": "scripts/after-pack.cjs",
     "electronFuses": {
       "enableNodeCliInspectArguments": false,
       "enableNodeOptionsEnvironmentVariable": false,
